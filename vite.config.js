@@ -1,7 +1,7 @@
-import { statSync } from "node:fs";
+import { existsSync, statSync } from "node:fs";
 import { resolve } from "node:path";
 import { pathToFileURL } from "node:url";
-import { renderContactLinks, renderCoverLinks, renderCvButton } from "./scripts/site-links.js";
+import { renderTilePhoto, renderContactLinks, renderCoverLinks, renderCvButton } from "./scripts/site-links.js";
 import { renderCovers, renderPanels, renderTracks, screenshotUrl } from "./scripts/sleeves.js";
 
 const dataFile = resolve(import.meta.dirname, "src/projects.js");
@@ -52,6 +52,9 @@ function projectCards() {
       return html
         .replace("<!-- site-links-cover -->", renderCoverLinks(site))
         .replace("<!-- site-links-contact -->", renderContactLinks(site))
+        .replace(/<!-- about-photo-(\d) -->/g, (_, n) =>
+          renderTilePhoto(n, existsSync(resolve(import.meta.dirname, `public/about/tile-${n}.jpg`))),
+        )
         .replace("<!-- site-cv-button -->", renderCvButton(site))
         .replace("<!-- project-cards -->", projects.map(renderCard).join("\n"))
         .replace("<!-- project-tracks -->", renderTracks(projects))

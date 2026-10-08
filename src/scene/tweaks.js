@@ -182,3 +182,16 @@ export const RECORD_LOOK = {
 // Reduced motion: length of the crossfade used instead of the sequence (s)
 export const REDUCED_MOTION_FADE = 0.25;
 // ----------------------------------------------------------------------------
+
+// ABOUT: the vinyl record behind the About sleeve (src/about.js; the sizes are in src/style.css)
+export const ABOUT = {
+  peek: 0.58, // fraction of the record's diameter that shows past the sleeve's right edge (wide screens)
+  peekNarrow: 0.14, // ...past the sleeve's bottom edge (below 900px)
+  slideDuration: 0.9, // s
+  slideEase: "power3.out",
+  spinSeconds: 12, // per turn
+  hoverShift: 40, // px further out while the sleeve is hovered
+  hoverDuration: 0.5,
+  hoverBackDuration: 0.7,
+  enterThreshold: 0.3, // how much of the sleeve must be on screen before the record slides out
+};

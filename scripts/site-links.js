@@ -37,3 +37,7 @@ export function renderCvButton(site) {
     ? `<a class="button" href="${escapeHtml(site.cv)}" download="${escapeHtml(site.cvFileName)}" aria-label="Download my CV (PDF)">Download CV</a>`
     : "";
 }
+
+// Optional photo for an About tile (public/about/tile-<n>.jpg). No file, no markup (so no 404).
+export const renderTilePhoto = (n, exists) =>
+  exists ? `<img class="about-photo" src="/about/tile-${n}.jpg" alt="" decoding="async">` : "";

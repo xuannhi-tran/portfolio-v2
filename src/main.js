@@ -3,6 +3,7 @@
 // Plain #about / #contact links keep working and scroll within the home view.
 // Without JS every section is visible, so the content stays readable.
 
+import { initAbout } from "./about.js";
 import { initShelf, enterShelf, leaveShelf, syncShelfRoute } from "./shelf.js";
 
 const views = document.querySelectorAll("[data-view]");
@@ -73,5 +74,6 @@ function route() {
 }
 
 initShelf();
+initAbout();
 window.addEventListener("hashchange", route);
 route();

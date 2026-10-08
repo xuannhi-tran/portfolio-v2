@@ -274,6 +274,427 @@ h2 {
   margin: 0 0 1.5rem;
 }
 
+/* About: a landscape album sleeve (light, with four tiles in a monochrome collage) and a record peeking out
+   from behind it (src/about.js animates the record). The site is black and white, so everything here is grey.
+   Colours (all variables on #about / #contact, so the whole look flips in one place):
+     sleeve:  --sleeve-bg, --sleeve-edge, --sleeve-ink (the caption on the sleeve margin)
+     tiles:   --tile-hello-bg / -text / -label, --tile-build-*, --tile-outside-*, --tile-work-* (+ --tile-build-edge)
+     record:  --record-label-bg, --record-label-ink
+   The record's peek is ABOUT.peek in src/scene/tweaks.js. Add the class "about--dark" to #about for a dark sleeve. */
+:root {
+  --about-record: clamp(16rem, 28vw, 30rem); /* the record's diameter */
+  --peek-x: calc(var(--about-record) * var(--about-peek, 0.58)); /* how far it shows past the sleeve's right edge */
+  --peek-y: 0px;
+  /* The sleeve is centred. It narrows when needed so the record's label always stays on screen. */
+  --about-w: min(70rem, 100% - 2 * (var(--about-record) * 0.3 + 24px));
+}
+
+.about,
+.contact {
+  --sleeve-bg: #e9e7e1;
+  --sleeve-edge: #cfccc3;
+  --sleeve-ink: #3a3935;
+  --tile-hello-bg: #0b0b0b;
+  --tile-hello-text: #ececec;
+  --tile-hello-label: #ababab;
+  --tile-build-bg: #cfcabc;
+  --tile-build-text: #111111;
+  --tile-build-label: #46423a;
+  --tile-build-edge: #aaa494;
+  --tile-outside-bg: #222222;
+  --tile-outside-text: #ececec;
+  --tile-outside-label: #b4b4b4;
+  --tile-work-bg: #151515;
+  --tile-work-text: #ececec;
+  --tile-work-label: #ababab;
+  --record-label-bg: #f2f2f0;
+  --record-label-ink: #151515;
+}
+
+.about.about--dark {
+  --sleeve-bg: #141414;
+  --sleeve-edge: #3a3a3a;
+  --sleeve-ink: #a8a8a8;
+  --tile-build-edge: #8c8676;
+}
+
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}
+
+/* The section spans the page, so overflow-x: clip stops the record from ever making the page scroll sideways */
+.about {
+  max-width: none;
+  margin: 0;
+  padding: 2rem 0 0;
+  overflow-x: clip;
+}
+
+/* About and Contact are one block: the same width, centred */
+.about-stage,
+.contact {
+  width: var(--about-w);
+  margin-inline: auto;
+}
+
+.contact {
+  max-width: none;
+  padding-inline: 0;
+  padding-top: 2.5rem;
+}
+
+.about-stage {
+  position: relative;
+  isolation: isolate;
+  padding-bottom: var(--peek-y);
+}
+
+.about-sleeve {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  padding: 12px 18px 18px;
+  border: 1px solid var(--sleeve-edge);
+  border-radius: 14px;
+  background: var(--sleeve-bg);
+  color: var(--sleeve-ink);
+}
+
+/* A very faint paper grain, under the tiles */
+.about-sleeve::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  pointer-events: none;
+  opacity: 0.1;
+  mix-blend-mode: multiply;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='180' height='180'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='2' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 1.3 -0.4'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+}
+
+.about .about-caption {
+  position: relative;
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+  max-width: none;
+  margin: 0;
+  font-size: 0.7rem;
+  color: var(--sleeve-ink);
+}
+
+/* The collage: 12 columns, staggered tiles that are as tall as their text */
+.about-grid {
+  position: relative;
+  display: grid;
+  grid-template-columns: repeat(12, minmax(0, 1fr));
+  grid-template-rows: repeat(12, auto);
+  align-items: start;
+  gap: 14px;
+}
+
+.about-tile {
+  position: relative;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  padding: 30px;
+  border: 1px solid transparent;
+  border-radius: 5px;
+  background: var(--t-bg);
+  color: var(--t-text);
+}
+
+.about-tile > :not(.about-motif, .about-photo) {
+  position: relative;
+  z-index: 1;
+}
+
+.about-tile h3 {
+  margin: 0;
+  font-weight: 400;
+  color: var(--t-label);
+}
+
+.about-tile p {
+  max-width: none;
+  margin: 0;
+  font-size: 1.2rem;
+  line-height: 1.55;
+  color: var(--t-text);
+}
+
+.about-tile--hello {
+  --t-bg: var(--tile-hello-bg);
+  --t-text: var(--tile-hello-text);
+  --t-label: var(--tile-hello-label);
+  grid-column: 1 / 8;
+  grid-row: 1 / 7;
+}
+
+.about-tile--build {
+  --t-bg: var(--tile-build-bg);
+  --t-text: var(--tile-build-text);
+  --t-label: var(--tile-build-label);
+  grid-column: 8 / 13;
+  grid-row: 1 / 8;
+  border-color: var(--tile-build-edge);
+}
+
+.about-tile--outside {
+  --t-bg: var(--tile-outside-bg);
+  --t-text: var(--tile-outside-text);
+  --t-label: var(--tile-outside-label);
+  grid-column: 1 / 6;
+  grid-row: 7 / 13;
+}
+
+.about-tile--work {
+  --t-bg: var(--tile-work-bg);
+  --t-text: var(--tile-work-text);
+  --t-label: var(--tile-work-label);
+  grid-column: 6 / 13;
+  grid-row: 8 / 13;
+}
+
+/* One thin-line motif per tile, in the tile's text colour, in a corner and cropped by the tile edge */
+.about-motif {
+  position: absolute;
+  z-index: 0;
+  width: 11rem;
+  height: auto;
+  color: var(--t-text);
+  opacity: 0.2;
+  pointer-events: none;
+}
+
+.about-motif * {
+  vector-effect: non-scaling-stroke;
+}
+
+.about-tile--hello .about-motif {
+  top: -0.4rem;
+  right: -1.6rem;
+}
+
+.about-tile--build .about-motif {
+  right: -1.2rem;
+  bottom: -1.6rem;
+}
+
+/* Sheet music: staves, a clef and a few notes, tilted and cropped by the tile (white strokes on the charcoal) */
+.about-tile--outside .about-motif--staff {
+  top: -2.4rem;
+  right: -3.2rem;
+  width: 27rem;
+  opacity: 0.27;
+  transform: rotate(-8deg);
+  transform-origin: 70% 40%;
+}
+
+.about-tile--work .about-motif {
+  top: -1.6rem;
+  right: -1.8rem;
+}
+
+/* Optional photos (public/about/tile-1.jpg ... tile-4.jpg): full bleed, greyscale, darkened; the motif goes */
+.about-photo {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  filter: grayscale(1);
+}
+
+.about-tile:has(.about-photo) {
+  --t-text: #f0f0f0;
+  --t-label: #cfcfcf;
+}
+
+.about-tile:has(.about-photo)::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  background: linear-gradient(180deg, rgba(0, 0, 0, 0.58), rgba(0, 0, 0, 0.8));
+}
+
+/* Tile 3's photo (sheet music): inverted to white notes on black. --tile-3-invert: 1 inverts, 0 leaves it as it is.
+   --tile-3-overlay: how dark the overlay on top is (the text needs it to stay readable). */
+.about-tile--outside {
+  --tile-3-invert: 1;
+  --tile-3-overlay: 0.6; /* 0.58+ keeps the text AA even over pure-white notes */
+}
+
+.about-tile--outside .about-photo {
+  filter: grayscale(1) invert(var(--tile-3-invert));
+}
+
+.about-tile--outside:has(.about-photo)::after {
+  background: linear-gradient(180deg, rgba(0, 0, 0, var(--tile-3-overlay)), rgba(0, 0, 0, calc(var(--tile-3-overlay) + 0.12)));
+}
+
+.about-tile:has(.about-photo) .about-motif {
+  display: none;
+}
+
+/* The record. Its default place is the final one (peeking out), so without JS or with reduced motion it
+   simply sits there; src/about.js hides it behind the sleeve first (.is-armed) and slides it out. */
+.about-record {
+  position: absolute;
+  z-index: 0;
+  right: calc(var(--peek-x) * -1);
+  top: 50%;
+  width: var(--about-record);
+  height: var(--about-record);
+  margin-top: calc(var(--about-record) / -2);
+  border-radius: 50%;
+  will-change: transform;
+}
+
+/* A soft light behind it, so it reads against the black page */
+.about-record::before {
+  content: "";
+  position: absolute;
+  inset: -12%;
+  z-index: -1;
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(255, 255, 255, 0.22) 50%, rgba(255, 255, 255, 0) 70%);
+  pointer-events: none;
+}
+
+/* The sheen stays put while the record turns */
+.about-record::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  pointer-events: none;
+  background: conic-gradient(
+    from 25deg,
+    rgba(255, 255, 255, 0) 0deg,
+    rgba(255, 255, 255, 0.45) 24deg,
+    rgba(255, 255, 255, 0) 60deg,
+    rgba(255, 255, 255, 0) 180deg,
+    rgba(255, 255, 255, 0.32) 204deg,
+    rgba(255, 255, 255, 0) 240deg
+  );
+}
+
+.about-disc {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  background:
+    radial-gradient(circle, #0a0a0a 0 41%, transparent 41.4%),
+    radial-gradient(
+      circle,
+      transparent 0 47%, rgba(255, 255, 255, 0.2) 47.3%, transparent 48.3%,
+      transparent 61%, rgba(255, 255, 255, 0.16) 61.3%, transparent 62.5%,
+      transparent 75%, rgba(255, 255, 255, 0.14) 75.3%, transparent 76.5%
+    ),
+    radial-gradient(circle, transparent 0 91%, #9a9a9a 96.5%, #303030 100%),
+    repeating-radial-gradient(circle, #0c0c0c 0 1.5px, #333 1.5px 2.5px);
+  box-shadow: 0 0 0 1px #b4b4b4, 0 0 0 4px #0b0b0b, 0 0 0 5px #4a4a4a;
+}
+
+.about-record-label {
+  position: relative;
+  display: grid;
+  place-items: center;
+  align-content: center;
+  gap: 0.2em;
+  width: 40%;
+  aspect-ratio: 1;
+  border-radius: 50%;
+  background: var(--record-label-bg);
+  color: var(--record-label-ink);
+  text-align: center;
+  line-height: 1;
+}
+
+.about-record-label b {
+  font-family: var(--serif);
+  font-weight: 400;
+  font-size: calc(var(--about-record) * 0.13);
+}
+
+.about-record-label small {
+  font-family: var(--mono);
+  font-size: calc(var(--about-record) * 0.021);
+  letter-spacing: 0.1em;
+  line-height: 1.4;
+  text-transform: uppercase;
+}
+
+.about-record-label::after {
+  content: "";
+  position: absolute;
+  width: 5%;
+  aspect-ratio: 1;
+  border-radius: 50%;
+  background: #8a8a86;
+  top: 9%;
+  left: 50%;
+  translate: -50% 0;
+}
+
+.about-stage.is-armed .about-record {
+  transform: translateX(calc(var(--peek-x) * -1 - 4px));
+}
+
+/* Narrow screens: one column of tiles, and the record peeks out of the bottom edge instead */
+@media (max-width: 899.98px) {
+  :root {
+    --about-record: min(62vw, 16rem);
+    --peek-x: 0px;
+    --peek-y: calc(var(--about-record) * var(--about-peek-narrow, 0.14));
+    --about-w: calc(100% - 3rem);
+  }
+
+  .about-sleeve {
+    padding: 10px 12px 12px;
+  }
+
+  .about-grid {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+  }
+
+  .about-tile {
+    padding: 22px;
+  }
+
+  .about-tile p {
+    font-size: 1.03rem;
+  }
+
+  .about-record {
+    right: auto;
+    top: auto;
+    bottom: 0;
+    left: 50%;
+    margin: 0 0 0 calc(var(--about-record) / -2);
+  }
+
+  .about-stage.is-armed .about-record {
+    transform: translateY(calc(var(--peek-y) * -1 - 4px));
+  }
+}
+
 /* Routing: JS hides the views that aren't active */
 [hidden] {
   display: none !important;
