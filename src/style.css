@@ -112,6 +112,108 @@ a:focus-visible {
   color: var(--bg);
 }
 
+/* Fixed nav */
+.nav {
+  position: fixed;
+  inset: 0 0 auto 0;
+  z-index: 10;
+  background: rgba(0, 0, 0, 0.85);
+  backdrop-filter: blur(6px);
+  border-bottom: 1px solid var(--line);
+}
+
+.nav-inner {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  max-width: 44rem;
+  margin: 0 auto;
+  padding: 0.9rem 1.5rem;
+}
+
+.nav ul {
+  display: flex;
+  gap: 1.5rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.wordmark {
+  color: var(--text);
+}
+
+.nav a {
+  text-decoration: none;
+  transition: color 0.2s;
+}
+
+.nav a:hover {
+  color: var(--text);
+}
+
+/* Projects */
+.projects {
+  max-width: 44rem;
+  margin: 0 auto;
+  padding: 5rem 1.5rem 4rem;
+  scroll-margin-top: 1rem;
+}
+
+h2 {
+  margin: 0 0 2rem;
+  font-weight: 400;
+  font-size: clamp(2rem, 6vw, 3rem);
+  line-height: 1.1;
+}
+
+.cards {
+  display: grid;
+  gap: 1.25rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+@media (min-width: 40rem) {
+  .cards {
+    grid-template-columns: 1fr 1fr;
+  }
+}
+
+.card {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.5rem;
+  padding: 1.25rem;
+  border: 1px solid var(--line);
+  border-radius: 0.5rem;
+}
+
+.card > * {
+  margin: 0;
+}
+
+.card h3 {
+  font-weight: 500;
+  font-size: 1.5rem;
+  line-height: 1.2;
+}
+
+.card .stack {
+  text-transform: none;
+  letter-spacing: 0.04em;
+}
+
+.card-links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.25rem 1.25rem;
+  margin-top: auto;
+  padding-top: 0.5rem;
+}
+
 @media (prefers-reduced-motion: reduce) {
   * {
     transition: none !important;
