@@ -7,10 +7,30 @@ import { initShelf, enterShelf, leaveShelf } from "./shelf.js";
 const views = document.querySelectorAll("[data-view]");
 const projectsLink = document.querySelector('[data-nav="projects"]');
 
+// Dev-only preview of the 3D turntable and record: #/dev/turntable (not in production builds)
+let unmountDev = null;
+let devToken = 0;
+
 function route() {
   const hash = location.hash;
   let view = "home";
   let target = null;
+
+  const token = ++devToken;
+  if (import.meta.env.DEV) {
+    unmountDev?.();
+    unmountDev = null;
+    if (hash === "#/dev/turntable") {
+      views.forEach((el) => {
+        el.hidden = true;
+      });
+      leaveShelf();
+      import("./scene/dev.js").then((dev) => {
+        if (token === devToken) unmountDev = dev.mountDevPreview();
+      });
+      return;
+    }
+  }
 
   if (hash === "#/projects") {
     view = "shelf";
