@@ -45,6 +45,24 @@ export const COMPACT = {
 };
 export const LEAVE_OFFSET = 1.8; // the played sleeve slides this far to the LEFT (away from the turntable) while it fades out
 
+// COLLAPSED_STACK: while a record plays, the remaining sleeves on the left start collapsed, tightly
+// overlapped like records in a crate, so only a thin strip of each (its front edge with the
+// title label) shows. They spread out to the normal "playing" layout (the one used for swapping)
+// while the pointer is over the group, a sleeve button has keyboard focus, or after a tap on
+// touch screens, and collapse again when it leaves. Wide screens only. Distances are world units
+// (a sleeve is 2 wide, 0.24 thick); times are seconds.
+export const COLLAPSED_STACK = {
+  stepY: 0.3, // vertical distance between collapsed sleeves; smaller = tighter (do not go below ~0.25, the slab thickness is 0.24)
+  stepZ: 0.1, // each lower sleeve sticks out this far towards the camera, so a sliver of its top shows
+  offsetY: 0, // shift the collapsed group up (+) or down (-)
+  hoverInDelay: 0.15, // the pointer must stay over the group this long before it expands
+  hoverOutDelay: 0.25, // ...and stay off it this long before it collapses again
+  expandDuration: 0.35,
+  expandEase: "power2.out",
+  collapseDuration: 0.35,
+  collapseEase: "power2.inOut",
+  hitPadding: 0.35, // the invisible hover area is the whole group plus this margin, so moving between sleeves never collapses it
+};
 // Light and colour
 export const COVER_BRIGHTNESS = 1; // covers and edge labels are unlit; 1 = identical to the SVG
 export const COVER_TEXTURE_SIZE = 2048; // crispness vs GPU memory (4 covers x size x size x 4 bytes)

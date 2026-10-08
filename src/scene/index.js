@@ -123,6 +123,72 @@ export async function createShelfScene({ canvas, covers, onHover, onSelect, onSt
   let tableShown = false; // the turntable only exists on screen while a record is picked
   let disposed = false;
 
+  // ---- Collapsed stack (playing state, wide screens) -------------------------
+  // collapseK.v: 0 = the remaining sleeves are spread out (the "playing" layout used for swapping),
+  // 1 = collapsed like records in a crate. It only shows once the sleeves have closed up
+  // (it is multiplied by the sequence's `leave`), so picking, ejecting and swapping are unchanged.
+  const CS = K.COLLAPSED_STACK;
+  const collapseK = { v: 0 };
+  let wantExpanded = false;
+  let expandTimer = 0;
+  let collapseTimer = 0;
+  let collapseTween = null;
+  // One invisible box over the whole group (collapsed or open), so moving from sleeve to sleeve
+  // never counts as leaving it
+  const groupHit = new THREE.Mesh(new THREE.BoxGeometry(1, 1, 1), new THREE.MeshBasicMaterial({ visible: false }));
+  root.add(groupHit);
+
+  function clearCollapseTimers() {
+    clearTimeout(expandTimer);
+    clearTimeout(collapseTimer);
+    expandTimer = collapseTimer = 0;
+  }
+
+  // Moves collapseK to 0 (open) or 1 (collapsed); instant = no tween (reduced motion always snaps)
+  function tweenCollapse(target, instant = false) {
+    collapseTween?.kill();
+    collapseTween = null;
+    if (instant || reduceMotion) {
+      collapseK.v = target;
+      return;
+    }
+    collapseTween = gsap.to(collapseK, {
+      v: target,
+      duration: target ? CS.collapseDuration : CS.expandDuration,
+      ease: target ? CS.collapseEase : CS.expandEase,
+      overwrite: true,
+    });
+  }
+
+  const groupActive = () => state === "playing" && !compact;
+  const isOpen = () => wantExpanded && collapseK.v < 0.5;
+
+  function expand() {
+    if (!groupActive()) return;
+    clearCollapseTimers();
+    wantExpanded = true;
+    tweenCollapse(0);
+  }
+  function collapse() {
+    clearCollapseTimers();
+    wantExpanded = false;
+    if (state === "playing") tweenCollapse(1);
+  }
+  // With a small delay, so a quick pass of the pointer does not make it flicker
+  function requestExpand() {
+    if (!groupActive()) return;
+    clearTimeout(collapseTimer);
+    collapseTimer = 0;
+    if (wantExpanded || expandTimer) return;
+    expandTimer = setTimeout(expand, CS.hoverInDelay * 1000);
+  }
+  function requestCollapse() {
+    clearTimeout(expandTimer);
+    expandTimer = 0;
+    if (!wantExpanded || collapseTimer) return;
+    collapseTimer = setTimeout(collapse, CS.hoverOutDelay * 1000);
+  }
+
   function setState(next, index) {
     state = next;
     onStateChange?.(next, index);
@@ -265,11 +331,13 @@ export async function createShelfScene({ canvas, covers, onHover, onSelect, onSt
   function placeSleeves(t, floatAmount) {
     const played = current ? current.index : -1;
     const leave = current ? current.p.leave : 0;
+    const collapsed = collapseK.v * leave; // 0 = the spread-out layout, 1 = collapsed
     root.position.y = Math.sin(t * 0.7) * K.BOB * floatAmount;
 
     sleeves.forEach((s, i) => {
       let y = s.restY;
       let x = 0;
+      let z = 0;
       let opacity = 1;
       if (played >= 0) {
         if (i === played) {
@@ -279,6 +347,11 @@ export async function createShelfScene({ canvas, covers, onHover, onSelect, onSt
           const rank = i < played ? i : i - 1;
           const closedY = ((n - 2) / 2 - rank) * K.STEP_Y;
           y = THREE.MathUtils.lerp(s.restY, closedY, leave);
+          if (collapsed > 0) {
+            const collapsedY = ((n - 2) / 2 - rank) * CS.stepY + CS.offsetY;
+            y = THREE.MathUtils.lerp(y, collapsedY, collapsed);
+            z = collapsed * rank * CS.stepZ;
+          }
         }
       }
 
@@ -289,10 +362,18 @@ export async function createShelfScene({ canvas, covers, onHover, onSelect, onSt
       s.mesh.scale.setScalar(toCamera.length() / distance);
 
       const bob = Math.sin(t * 0.9 + i * 0.8) * 0.015 * floatAmount;
-      s.mesh.position.set(x, y + bob + s.state.lift * K.LIFT_Y, s.baseZ + s.state.lift * K.LIFT_Z);
+      s.mesh.position.set(x, y + bob + s.state.lift * K.LIFT_Y, s.baseZ + z + s.state.lift * K.LIFT_Z);
       s.setLook(s.state.glow, s.state.dim);
       s.setOpacity(opacity);
     });
+
+    // The hover area: the remaining sleeves (n - 1 of them), spread or collapsed, plus a margin
+    const half = (steps, step) => (steps * step) / 2 + 0.12 + CS.hitPadding;
+    const open = half(n - 2, K.STEP_Y);
+    const shut = half(n - 2, CS.stepY);
+    const height = 2 * THREE.MathUtils.lerp(open, shut, collapseK.v);
+    groupHit.scale.set(2 + 2 * CS.hitPadding, height, 2 + 2 * CS.hitPadding);
+    groupHit.position.set(0, THREE.MathUtils.lerp(0, CS.offsetY, collapseK.v), 0);
   }
 
   // ---- The sequence --------------------------------------------------------
@@ -387,6 +468,9 @@ export async function createShelfScene({ canvas, covers, onHover, onSelect, onSt
 
   function finishEject(c) {
     retire(c);
+    clearCollapseTimers();
+    wantExpanded = false;
+    tweenCollapse(0, true);
     turntable.setTonearm(0);
     tableShown = false;
     viewLock = false;
@@ -442,6 +526,9 @@ export async function createShelfScene({ canvas, covers, onHover, onSelect, onSt
     viewLock = lock;
     active = -1;
     applyHover();
+    clearCollapseTimers();
+    wantExpanded = false;
+    tweenCollapse(1); // the sleeves collapse as they close up around the gap (see placeSleeves)
 
     tl.eventCallback("onComplete", () => {
       if (current !== picked || tl.reversed()) return;
@@ -468,6 +555,8 @@ export async function createShelfScene({ canvas, covers, onHover, onSelect, onSt
   function eject() {
     if (state !== "playing" || !current) return;
     const c = current;
+    clearCollapseTimers();
+    wantExpanded = false;
     setState("transitioning", c.index);
     c.tl.timeScale(1);
     c.tl.eventCallback("onReverseComplete", () => finishEject(c));
@@ -483,6 +572,9 @@ export async function createShelfScene({ canvas, covers, onHover, onSelect, onSt
     viewLock = true;
     active = -1;
     applyHover();
+    clearCollapseTimers();
+    wantExpanded = false;
+    tweenCollapse(0, true); // a swap always starts from the spread-out positions, even if the group was collapsed
     setState("transitioning", i);
 
     old.tl.timeScale(K.SWAP_SPEED);
@@ -528,6 +620,7 @@ export async function createShelfScene({ canvas, covers, onHover, onSelect, onSt
       gsap.killTweensOf(sleeves.map((s) => s.state));
       setState("transitioning", index);
       beginPick(index).progress(1, false);
+      tweenCollapse(1, true);
     }
   }
   // ---- Render loop (runs only while the canvas is on screen and the tab is visible) ----
@@ -610,44 +703,85 @@ export async function createShelfScene({ canvas, covers, onHover, onSelect, onSt
   document.addEventListener("visibilitychange", sync);
 
   // ---- Pointer picking -------------------------------------------------------
+  // Stack state: hovering / clicking a sleeve. Playing state (wide screens): the remaining sleeves
+  // are collapsed until the pointer enters their group; then clicking a sleeve swaps. While
+  // collapsed, a click on the group only expands it.
   const raycaster = new THREE.Raycaster();
   const pointer = new THREE.Vector2();
-  function pickAt(e) {
+  function aim(e) {
     const rect = canvas.getBoundingClientRect();
     pointer.set(((e.clientX - rect.left) / rect.width) * 2 - 1, -((e.clientY - rect.top) / rect.height) * 2 + 1);
     raycaster.setFromCamera(pointer, camera);
+  }
+  function pickAt(e) {
+    aim(e);
     const targets = sleeves
       .filter((s, i) => s.mesh.visible && !(current && i === current.index))
       .map((s) => s.mesh);
     const hit = raycaster.intersectObjects(targets, false)[0];
     return hit ? hit.object.userData.index : -1;
   }
+  function inGroup(e) {
+    aim(e);
+    return raycaster.intersectObject(groupHit, false).length > 0;
+  }
   let hovered = -1;
+  let openAtPointerDown = true;
+  const setHovered = (i) => {
+    if (i === hovered) return;
+    hovered = i;
+    onHover(i);
+  };
   const onMove = (e) => {
-    if (e.pointerType === "touch" || !canPickSleeves()) return;
-    const i = pickAt(e);
-    canvas.style.cursor = i >= 0 ? "pointer" : "";
-    if (i !== hovered) {
-      hovered = i;
-      onHover(i);
+    if (e.pointerType === "touch") return;
+    if (state === "stack") {
+      const i = pickAt(e);
+      canvas.style.cursor = i >= 0 ? "pointer" : "";
+      setHovered(i);
+    } else if (groupActive()) {
+      const inside = inGroup(e);
+      if (inside) requestExpand();
+      else requestCollapse();
+      canvas.style.cursor = inside ? "pointer" : "";
+      setHovered(isOpen() ? pickAt(e) : -1); // individual glow only while the group is open
     }
   };
   const onLeave = () => {
     canvas.style.cursor = "";
-    if (hovered !== -1) {
-      hovered = -1;
-      onHover(-1);
+    setHovered(-1);
+    if (groupActive()) requestCollapse();
+  };
+  const onPointerDown = (e) => {
+    openAtPointerDown = state !== "playing" || isOpen();
+    if (!groupActive()) return;
+    const inside = inGroup(e);
+    if (e.pointerType === "touch") {
+      if (!inside) collapse(); // tapping outside collapses
+      else if (!openAtPointerDown) expand(); // the first tap expands (and does not swap)
     }
   };
   const onClick = (e) => {
-    if (!canPickSleeves()) return;
-    const i = pickAt(e);
-    if (i >= 0) onSelect(i);
+    if (state === "stack") {
+      const i = pickAt(e);
+      if (i >= 0) onSelect(i);
+    } else if (groupActive()) {
+      if (!openAtPointerDown) {
+        if (inGroup(e)) expand(); // collapsed: a click only expands
+        return;
+      }
+      const i = pickAt(e);
+      if (i >= 0) onSelect(i);
+    }
+  };
+  // On touch screens a tap anywhere else on the page also counts as "outside"
+  const onDocumentPointerDown = (e) => {
+    if (e.pointerType === "touch" && e.target !== canvas) collapse();
   };
   canvas.addEventListener("pointermove", onMove);
   canvas.addEventListener("pointerleave", onLeave);
+  canvas.addEventListener("pointerdown", onPointerDown);
   canvas.addEventListener("click", onClick);
-
+  document.addEventListener("pointerdown", onDocumentPointerDown, true);
   // ---- Dev helpers (dev builds only): window.__tl, window.__shelf and a scrub slider ----
   let devSlider = null;
   if (import.meta.env.DEV) {
@@ -670,7 +804,7 @@ export async function createShelfScene({ canvas, covers, onHover, onSelect, onSt
       update();
     });
     document.body.append(devSlider);
-    window.__shelf = { pick, eject, swap, skip, getState: () => state };
+    window.__shelf = { pick, eject, swap, skip, expand, collapse, getState: () => state, collapseAmount: () => collapseK.v };
   }
 
   sync();
@@ -686,6 +820,8 @@ export async function createShelfScene({ canvas, covers, onHover, onSelect, onSt
     eject,
     skip,
     jumpTo,
+    expand, // the group of remaining sleeves spreads out (e.g. a sleeve button got keyboard focus)
+    requestCollapse, // ...and collapses again after a short delay (focus left the group)
     getState: () => state,
     dispose() {
       disposed = true;
@@ -698,7 +834,13 @@ export async function createShelfScene({ canvas, covers, onHover, onSelect, onSt
       document.removeEventListener("visibilitychange", sync);
       canvas.removeEventListener("pointermove", onMove);
       canvas.removeEventListener("pointerleave", onLeave);
+      canvas.removeEventListener("pointerdown", onPointerDown);
       canvas.removeEventListener("click", onClick);
+      document.removeEventListener("pointerdown", onDocumentPointerDown, true);
+      clearCollapseTimers();
+      collapseTween?.kill();
+      groupHit.geometry.dispose();
+      groupHit.material.dispose();
       canvas.style.cursor = "";
       canvas.getAnimations().forEach((a) => a.cancel());
       if (current) {

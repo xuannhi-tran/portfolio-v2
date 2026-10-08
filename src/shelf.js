@@ -32,6 +32,11 @@ const hashFor = (i) => (i >= 0 ? `#/projects/${slugs[i]}` : "#/projects");
 let wantedSlug = null; // from the URL
 let routing = false; // true while the URL (not the user) is changing the state
 
+// Was the last input a key press (true) or a pointer press (false)?
+let usingKeyboard = false;
+document.addEventListener("keydown", () => (usingKeyboard = true), true);
+document.addEventListener("pointerdown", () => (usingKeyboard = false), true);
+
 let active = -1; // hovered / focused item
 let picked = -1; // the record that is playing (or on its way)
 let uiState = "stack";
@@ -58,6 +63,15 @@ function buildPlayControls() {
     b.textContent = `Play ${title}`;
     b.hidden = true;
     wireItem(b, i);
+    // Keyboard focus on any of them spreads the collapsed group out; focus leaving it collapses it.
+    // (Focus that a script moved after a mouse click does not count, so a swap made with the
+    // mouse leaves the group collapsed afterwards.)
+    b.addEventListener("focus", () => {
+      if (usingKeyboard) scene?.expand();
+    });
+    b.addEventListener("blur", (e) => {
+      if (!group.contains(e.relatedTarget)) scene?.requestCollapse();
+    });
     group.append(b);
     playButtons.push(b);
   });
