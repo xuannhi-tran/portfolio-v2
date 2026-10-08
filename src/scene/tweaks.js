@@ -195,3 +195,15 @@ export const ABOUT = {
   hoverBackDuration: 0.7,
   enterThreshold: 0.3, // how much of the sleeve must be on screen before the record slides out
 };
+
+// HERO: the landing page (src/hero.js; the layout is in src/style.css)
+export const HERO = {
+  diameter: "70vh", // the record's size on wide screens (narrow screens use 62vw)
+  crop: 0.38, // fraction of the record cropped off the right edge (wide screens)
+  spinSeconds: 40, // per turn
+  enterDuration: 0.7, // s, the text fading up
+  stagger: 0.09, // s between the text lines
+  riseBy: 22, // px the text rises
+  recordDuration: 0.95, // s, the record sliding in
+  recordShift: 90, // px it slides in from
+};

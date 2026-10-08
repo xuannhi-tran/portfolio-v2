@@ -179,3 +179,13 @@ export function renderPanels(projects) {
     })
     .join("\n");
 }
+
+// The landing page's tracklist: one link per project (01 RAG, 02 EXPENSE TRACKER, ...)
+export function renderHeroTracks(projects) {
+  return projects
+    .map(
+      (p, i) =>
+        `<li><a href="#/projects/${escapeHtml(p.slug)}"><span class="num">${String(i + 1).padStart(2, "0")}</span>${escapeHtml(p.shortTitle ?? p.title)}</a></li>`,
+    )
+    .join("\n            ");
+}

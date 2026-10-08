@@ -4,6 +4,7 @@
 // Without JS every section is visible, so the content stays readable.
 
 import { initAbout } from "./about.js";
+import { initHero } from "./hero.js";
 import { initShelf, enterShelf, leaveShelf, syncShelfRoute } from "./shelf.js";
 
 const views = document.querySelectorAll("[data-view]");
@@ -75,5 +76,6 @@ function route() {
 
 initShelf();
 initAbout();
+initHero();
 window.addEventListener("hashchange", route);
 route();

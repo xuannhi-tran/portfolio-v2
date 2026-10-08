@@ -35,80 +35,272 @@ body {
   color: var(--muted);
 }
 
+/* Landing hero: a full-viewport intro with a big record cropped by the right edge (src/hero.js animates it).
+   The numbers (record size, crop, spin) are the HERO block in src/scene/tweaks.js. */
 .cover {
+  --hero-d: 70vh; /* the record's diameter */
+  --hero-crop: 0.38; /* the fraction of it cropped off the right edge */
+  --hero-spin: 40s;
+  --hero-visible: calc(var(--hero-d) * (1 - var(--hero-crop))); /* how much of the record is on screen */
+  position: relative;
+  display: grid;
+  grid-template-rows: 1fr auto;
   min-height: 100svh;
-  display: flex;
-  flex-direction: column;
-  justify-content: center;
-  max-width: 44rem;
-  margin: 0 auto;
-  padding: 5rem 1.5rem 3rem;
+  max-width: none;
+  margin: 0;
+  padding: 4.5rem 0 0;
+  overflow-x: clip;
   scroll-margin-top: 0;
 }
 
-.cover-frame {
+.hero-copy {
+  position: relative;
+  z-index: 1;
+  align-self: center;
   display: flex;
   flex-direction: column;
-  align-items: center;
-  gap: 1.5rem;
-  padding: clamp(2rem, 7vw, 4rem) clamp(1.25rem, 5vw, 3rem);
-  border: 1px solid var(--line);
-  border-radius: 1.5rem;
-  text-align: center;
+  align-items: flex-start;
+  gap: 1.35rem;
+  /* never wider than the space left of the record (plus a 3rem gap), so the text can't reach it */
+  max-width: calc(100% - var(--hero-visible) - 3rem);
+  padding: 2rem 0 2rem clamp(1.5rem, 6vw, 6rem);
 }
 
-.cover-frame > * {
+.hero-copy > * {
   margin: 0;
 }
 
-/* Role | hairline | school, with the year centred under the line */
-.cover-meta {
-  display: grid;
-  grid-template-columns: auto minmax(1.5rem, 1fr) auto;
+.hero-copy h1 {
+  font-weight: 400;
+  font-size: clamp(3rem, 7.2vw, 10rem);
+  line-height: 0.98;
+  letter-spacing: -0.02em;
+  background: none;
+  color: #fff;
+}
+
+/* One mono line that only ever breaks between its items */
+.hero-copy h1 span {
+  white-space: nowrap; /* if the name does not fit on one line it breaks between "Vo Xuan" and "Nhi Tran" */
+}
+
+/* One mono line that only breaks after the first slash, so "2026" is never left alone */
+.hero-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.2rem 0.7rem;
+}
+
+.hero-meta-group {
+  display: inline-flex;
+  gap: 0.7rem;
+  white-space: nowrap;
+}
+
+.hero-line {
+  max-width: 32rem;
+  font-size: 1.25rem;
+  line-height: 1.5;
+  color: #ededed;
+}
+
+.hero-cta {
+  display: flex;
+  flex-wrap: wrap;
   align-items: center;
-  column-gap: 1rem;
-  row-gap: 0.4rem;
-  width: 100%;
-  max-width: 30rem;
+  gap: 1.1rem 2rem;
+  margin-top: 0.5rem;
 }
 
-.cover-meta .role {
-  text-align: left;
+.hero-button {
+  margin: 0;
+  padding: 1rem 2.2rem;
+  font-size: 1.15rem;
 }
 
-.cover-meta .rule {
-  height: 1px;
-  background: var(--line);
+.hero-cta .links {
+  margin: 0;
 }
 
-.cover-meta .school {
-  text-align: right;
+/* The record */
+.hero-record {
+  position: absolute;
+  z-index: 0;
+  top: calc(50% - var(--hero-d) / 2 - 1.5rem);
+  right: calc(var(--hero-d) * var(--hero-crop) * -1);
+  width: var(--hero-d);
+  height: var(--hero-d);
+  border-radius: 50%;
+  will-change: transform;
+  pointer-events: none;
 }
 
-.cover-meta .year {
-  grid-column: 2;
+/* The sheen stays put while the record turns underneath */
+.hero-record::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  background: conic-gradient(
+    from 30deg,
+    rgba(255, 255, 255, 0) 0deg,
+    rgba(255, 255, 255, 0.26) 22deg,
+    rgba(255, 255, 255, 0) 56deg,
+    rgba(255, 255, 255, 0) 180deg,
+    rgba(255, 255, 255, 0.18) 202deg,
+    rgba(255, 255, 255, 0) 236deg
+  );
+}
+
+.hero-disc {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  background:
+    radial-gradient(circle, #0a0a0a 0 36%, transparent 36.4%),
+    radial-gradient(
+      circle,
+      transparent 0 46%, rgba(255, 255, 255, 0.14) 46.3%, transparent 47.4%,
+      transparent 60%, rgba(255, 255, 255, 0.11) 60.3%, transparent 61.5%,
+      transparent 74%, rgba(255, 255, 255, 0.1) 74.3%, transparent 75.5%
+    ),
+    radial-gradient(circle, transparent 0 92%, #8c8c8c 97%, #2c2c2c 100%),
+    repeating-radial-gradient(circle, #0b0b0b 0 1.5px, #2a2a2a 1.5px 2.5px);
+  box-shadow: 0 0 0 1px #6a6a6a, 0 0 0 4px #050505, 0 0 0 5px #333;
+  animation: hero-spin var(--hero-spin) linear infinite;
+  will-change: transform;
+}
+
+.cover.is-offscreen .hero-disc {
+  animation-play-state: paused;
+}
+
+@keyframes hero-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.hero-label {
+  position: relative;
+  display: grid;
+  place-items: center;
+  width: 28%;
+  aspect-ratio: 1;
+  place-items: end center;
+  padding-bottom: calc(var(--hero-d) * 0.05); /* the text sits below the spindle hole */
+  border-radius: 50%;
+  background: #f2f2f0;
+  color: #151515;
   text-align: center;
 }
 
-.cover-frame .links {
-  justify-content: center;
+.hero-label small {
+  max-width: 70%;
+  font-family: var(--mono);
+  font-size: calc(var(--hero-d) * 0.02);
+  letter-spacing: 0.1em;
+  line-height: 1.5;
+  text-transform: uppercase;
 }
 
-h1 {
-  font-weight: 400;
-  font-size: clamp(2.75rem, 11vw, 5.5rem);
-  line-height: 1;
-  letter-spacing: -0.015em;
-  background: linear-gradient(180deg, #fff 20%, #8f8f8f 100%);
-  -webkit-background-clip: text;
-  background-clip: text;
-  color: transparent;
+.hero-label::after {
+  content: "";
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 4.5%;
+  aspect-ratio: 1;
+  border-radius: 50%;
+  background: #050505;
+  translate: -50% -50%;
 }
 
-.intro {
-  max-width: 28rem;
-  font-size: 1.1rem;
+/* Before the entrance animation runs (only set by src/hero.js, never with reduced motion) */
+.cover.is-armed .hero-copy > *,
+.cover.is-armed .hero-record {
+  opacity: 0;
+}
+
+/* The tracklist along the bottom */
+.hero-tracks {
+  position: relative;
+  z-index: 1;
+  padding: 1.1rem clamp(1.5rem, 6vw, 6rem) 1.4rem;
+  border-top: 1px solid rgba(255, 255, 255, 0.15);
+}
+
+.hero-tracks .links {
+  margin: 0;
+  gap: 0.5rem 2.2rem;
+}
+
+.hero-tracks .num {
+  margin-right: 0.35em;
   color: var(--muted);
+}
+
+.hero-tracks a:hover .num,
+.hero-tracks a:focus-visible .num {
+  color: var(--text);
+}
+
+/* Narrow screens: the record on top (cropped by the right edge), the text below, a 2 x 2 tracklist */
+@media (max-width: 899.98px) {
+  .cover {
+    --hero-d: 62vw;
+    --hero-crop: 0.22;
+  }
+
+  .hero-record {
+    top: 5rem;
+  }
+
+  .hero-copy {
+    align-self: start;
+    max-width: none;
+    padding: calc(var(--hero-d) + 2rem) 1.5rem 2rem; /* below the record */
+    gap: 1.1rem;
+  }
+
+  .hero-copy h1 {
+    font-size: clamp(3.5rem, 20vw, 6rem);
+  }
+
+  .hero-meta {
+    font-size: 0.66rem;
+    letter-spacing: 0.08em;
+  }
+
+  .hero-line {
+    font-size: 1.125rem;
+  }
+
+  .hero-button {
+    padding: 0.9rem 1.8rem;
+  }
+
+  .hero-tracks {
+    padding-inline: 1.5rem;
+  }
+
+  .hero-tracks .links {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 0.9rem 1rem;
+  }
+
+  .hero-tracks .links a {
+    display: inline-block;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .hero-disc {
+    animation: none;
+  }
 }
 
 .links {

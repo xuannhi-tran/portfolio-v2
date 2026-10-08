@@ -31,36 +31,56 @@
 
     <main>
       <section class="cover" id="cover" data-view="home" aria-labelledby="name">
-        <div class="cover-frame">
-          <p class="label">Portfolio · 2026</p>
-
-          <h1 id="name">Vo Xuan Nhi Tran</h1>
-
-          <div class="cover-meta label">
-            <span class="role">Software Engineering student</span>
-            <span class="rule" aria-hidden="true"></span>
-            <span class="school">USYD</span>
-            <span class="year">2026</span>
+        <div class="hero-record" aria-hidden="true" data-hero-record>
+          <div class="hero-disc">
+            <span class="hero-label"><small>Nhi Tran · 2026</small></span>
           </div>
-
-          <p class="intro">
-            Hi, I'm Nhi. I'm in my third year of Software Engineering at USYD. I
-            like building small things end to end and learning how they work as
-            I go. I'm really into music, so that's the theme of this portfolio.
-          </p>
-
-          <ul class="links label">
-            <!-- site-links-cover -->
-          </ul>
-
-          <a class="button" href="#/projects">See my projects</a>
         </div>
+
+        <div class="hero-copy" data-hero-copy>
+          <p class="label">Portfolio — Side A</p>
+          <h1 id="name"><span>Vo Xuan</span> <span>Nhi Tran</span></h1>
+          <p class="label hero-meta">
+            <span class="hero-meta-group"
+              ><span>Software Engineering student</span
+              ><span aria-hidden="true">/</span></span
+            >
+            <span class="hero-meta-group"
+              ><span>USYD</span><span aria-hidden="true">/</span
+              ><span>2026</span></span
+            >
+          </p>
+          <p class="hero-line">
+            I build small web apps end to end. The music theme is because
+            there's always something playing while I work.
+          </p>
+          <div class="hero-cta">
+            <a class="button hero-button" href="#/projects">See my projects</a>
+            <ul class="links label">
+              <!-- site-links-cover -->
+            </ul>
+          </div>
+        </div>
+
+        <nav class="hero-tracks" aria-label="Projects">
+          <ul class="links label">
+            <!-- hero-tracks -->
+          </ul>
+        </nav>
       </section>
 
-      <section class="shelf" id="shelf" data-view="shelf" data-state="stack" aria-labelledby="shelf-title">
+      <section
+        class="shelf"
+        id="shelf"
+        data-view="shelf"
+        data-state="stack"
+        aria-labelledby="shelf-title"
+      >
         <div class="shelf-top">
           <a class="button back" href="#/">← Back to cover</a>
-          <button type="button" class="button back" id="eject" hidden>← All records</button>
+          <button type="button" class="button back" id="eject" hidden>
+            ← All records
+          </button>
         </div>
         <h2 id="shelf-title">Projects</h2>
         <p class="label shelf-label">Pick a record</p>
@@ -82,15 +102,55 @@
         <!-- The showcase: a window with the active project's screenshot (public/demos/<slug>.png,
              set up by src/shelf.js, with this placeholder as the fallback). "Try it live" mounts the
              project's site in an iframe inside [data-demo-live] (only on a click). -->
-        <section class="demo-frame" id="demo-frame" data-demo aria-label="Project demo" hidden>
+        <section
+          class="demo-frame"
+          id="demo-frame"
+          data-demo
+          aria-label="Project demo"
+          hidden
+        >
           <div class="demo-bar">
-            <span class="demo-dots" aria-hidden="true"><i></i><i></i><i></i></span>
-            <span class="label demo-host" data-demo-host aria-hidden="true"></span>
+            <span class="demo-dots" aria-hidden="true"
+              ><i></i><i></i><i></i
+            ></span>
+            <span
+              class="label demo-host"
+              data-demo-host
+              aria-hidden="true"
+            ></span>
             <div class="demo-actions">
-              <button type="button" class="label demo-btn" data-live-start hidden>Try it live</button>
-              <a class="label demo-btn" data-live-open target="_blank" rel="noopener noreferrer" hidden>Open in new tab</a>
-              <button type="button" class="label demo-btn" data-live-expand hidden>Expand</button>
-              <button type="button" class="label demo-btn" data-live-back hidden>Back to screenshot</button>
+              <button
+                type="button"
+                class="label demo-btn"
+                data-live-start
+                hidden
+              >
+                Try it live
+              </button>
+              <a
+                class="label demo-btn"
+                data-live-open
+                target="_blank"
+                rel="noopener noreferrer"
+                hidden
+                >Open in new tab</a
+              >
+              <button
+                type="button"
+                class="label demo-btn"
+                data-live-expand
+                hidden
+              >
+                Expand
+              </button>
+              <button
+                type="button"
+                class="label demo-btn"
+                data-live-back
+                hidden
+              >
+                Back to screenshot
+              </button>
             </div>
           </div>
           <div class="demo-body" data-demo-body data-state="placeholder">
@@ -105,7 +165,12 @@
               <div class="demo-slow" data-demo-slow hidden>
                 <p>
                   This demo is on free hosting and can take a while to wake up.
-                  <a data-live-open-slow target="_blank" rel="noopener noreferrer">Open it in a new tab</a>
+                  <a
+                    data-live-open-slow
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    >Open it in a new tab</a
+                  >
                   if it doesn't appear.
                 </p>
               </div>
@@ -118,7 +183,12 @@
         <a class="list-link label" href="#/list">View as list</a>
       </section>
 
-      <section class="projects" id="projects" data-view="list" aria-labelledby="projects-title">
+      <section
+        class="projects"
+        id="projects"
+        data-view="list"
+        aria-labelledby="projects-title"
+      >
         <h2 id="projects-title">Projects</h2>
 
         <ul class="cards">
@@ -126,49 +196,352 @@
         </ul>
       </section>
 
-      <section class="page-section about" id="about" data-view="home" aria-labelledby="about-title">
+      <section
+        class="page-section about"
+        id="about"
+        data-view="home"
+        aria-labelledby="about-title"
+      >
         <h2 class="sr-only" id="about-title">About</h2>
         <div class="about-stage" data-about-stage>
           <div class="about-record" aria-hidden="true" data-about-record>
             <div class="about-disc" data-about-disc>
-              <span class="about-record-label"><b>A</b><small>Nhi Tran<br />Side B · 33&frac13;</small></span>
+              <span class="about-record-label"
+                ><b>A</b><small>Nhi Tran<br />Side B · 33&frac13;</small></span
+              >
             </div>
           </div>
           <div class="about-sleeve" data-about-sleeve>
-            <p class="label about-caption" aria-hidden="true"><span>Side B · Liner notes</span><span>About</span></p>
+            <p class="label about-caption" aria-hidden="true">
+              <span>Side B · Liner notes</span><span>About</span>
+            </p>
             <div class="about-grid">
-            <section class="about-tile about-tile--hello" aria-labelledby="about-hello">
-              <!-- about-photo-1 -->
-              <svg class="about-motif" viewBox="0 0 120 90" aria-hidden="true" focusable="false"><g fill="none" stroke="currentColor" stroke-width="1" stroke-linecap="round" stroke-linejoin="round"><line x1="8" y1="14" x2="112" y2="14" /><line x1="8" y1="28" x2="96" y2="28" /><line x1="8" y1="42" x2="108" y2="42" /><line x1="8" y1="56" x2="80" y2="56" /><line x1="8" y1="70" x2="100" y2="70" /><line x1="8" y1="84" x2="64" y2="84" /></g></svg>
-              <h3 class="label" id="about-hello">Hello</h3>
-              <p>
-                I'm Nhi, a third-year Software Engineering student at the University of Sydney. I like building small, practical web apps, and I'm looking for a software internship where I can keep learning from people who build things for real users.
-              </p>
-            </section>
-            <section class="about-tile about-tile--build" aria-labelledby="about-build">
-              <!-- about-photo-2 -->
-              <svg class="about-motif" viewBox="0 0 120 90" aria-hidden="true" focusable="false"><g fill="none" stroke="currentColor" stroke-width="1" stroke-linecap="round" stroke-linejoin="round"><line x1="6" y1="84" x2="114" y2="84" /><rect x="12" y="58" width="13" height="26" rx="1.5" /><rect x="32" y="40" width="13" height="44" rx="1.5" /><rect x="52" y="50" width="13" height="34" rx="1.5" /><rect x="72" y="22" width="13" height="62" rx="1.5" /><rect x="92" y="34" width="13" height="50" rx="1.5" /></g></svg>
-              <h3 class="label" id="about-build">What I build</h3>
-              <p>
-                Most of my projects started with a small annoyance: free Discord music bots that started charging, budgets that never lasted the month, and job ads that only mention "PR or citizens" at the very end. So I built a music bot, an expense tracker and JobCompass.
-              </p>
-            </section>
-            <section class="about-tile about-tile--outside" aria-labelledby="about-outside">
-              <!-- about-photo-3 -->
-              <svg class="about-motif about-motif--staff" viewBox="0 0 320 170" aria-hidden="true" focusable="false"><g fill="none" stroke="currentColor" stroke-width="1" stroke-linecap="round" stroke-linejoin="round"><line x1="0" y1="20" x2="320" y2="20" /><line x1="0" y1="25" x2="320" y2="25" /><line x1="0" y1="30" x2="320" y2="30" /><line x1="0" y1="35" x2="320" y2="35" /><line x1="0" y1="40" x2="320" y2="40" /><line x1="2" y1="20" x2="2" y2="40" /><line x1="0" y1="72" x2="320" y2="72" /><line x1="0" y1="77" x2="320" y2="77" /><line x1="0" y1="82" x2="320" y2="82" /><line x1="0" y1="87" x2="320" y2="87" /><line x1="0" y1="92" x2="320" y2="92" /><line x1="2" y1="72" x2="2" y2="92" /><line x1="0" y1="124" x2="320" y2="124" /><line x1="0" y1="129" x2="320" y2="129" /><line x1="0" y1="134" x2="320" y2="134" /><line x1="0" y1="139" x2="320" y2="139" /><line x1="0" y1="144" x2="320" y2="144" /><line x1="2" y1="124" x2="2" y2="144" /><path d="M24 8 C37 18 33 36 22 44 C9 53 15 66 25 61 C32 57 28 47 20 49 M24 8 L22 74 C22 81 14 80 14 74" /><path d="M24 60 C37 70 33 88 22 96 C9 105 15 118 25 113 C32 109 28 99 20 101 M24 60 L22 126 C22 133 14 132 14 126" /><path d="M24 112 C37 122 33 140 22 148 C9 157 15 170 25 165 C32 161 28 151 20 153 M24 112 L22 178 C22 185 14 184 14 178" /><ellipse cx="70" cy="35" rx="3.6" ry="2.6" transform="rotate(-20 70 35)" fill="currentColor" /><line x1="73.4" y1="34.4" x2="73.4" y2="17" /><ellipse cx="98" cy="30" rx="3.6" ry="2.6" transform="rotate(-20 98 30)" /><line x1="101.4" y1="29.4" x2="101.4" y2="12" /><ellipse cx="126" cy="40" rx="3.6" ry="2.6" transform="rotate(-20 126 40)" fill="currentColor" /><line x1="129.4" y1="39.4" x2="129.4" y2="22" /><ellipse cx="160" cy="25" rx="3.6" ry="2.6" transform="rotate(-20 160 25)" fill="currentColor" /><line x1="156.6" y1="25.6" x2="156.6" y2="43" /><ellipse cx="190" cy="35" rx="3.6" ry="2.6" transform="rotate(-20 190 35)" /><line x1="193.4" y1="34.4" x2="193.4" y2="17" /><ellipse cx="228" cy="30" rx="3.6" ry="2.6" transform="rotate(-20 228 30)" fill="currentColor" /><line x1="231.4" y1="29.4" x2="231.4" y2="12" /><ellipse cx="262" cy="22.5" rx="3.6" ry="2.6" transform="rotate(-20 262 22.5)" fill="currentColor" /><line x1="258.6" y1="23.1" x2="258.6" y2="40.5" /><ellipse cx="66" cy="87" rx="3.6" ry="2.6" transform="rotate(-20 66 87)" /><line x1="69.4" y1="86.4" x2="69.4" y2="69" /><ellipse cx="96" cy="82" rx="3.6" ry="2.6" transform="rotate(-20 96 82)" fill="currentColor" /><line x1="99.4" y1="81.4" x2="99.4" y2="64" /><ellipse cx="128" cy="92" rx="3.6" ry="2.6" transform="rotate(-20 128 92)" fill="currentColor" /><line x1="131.4" y1="91.4" x2="131.4" y2="74" /><ellipse cx="164" cy="77" rx="3.6" ry="2.6" transform="rotate(-20 164 77)" /><line x1="160.6" y1="77.6" x2="160.6" y2="95" /><ellipse cx="196" cy="87" rx="3.6" ry="2.6" transform="rotate(-20 196 87)" fill="currentColor" /><line x1="199.4" y1="86.4" x2="199.4" y2="69" /><ellipse cx="232" cy="82" rx="3.6" ry="2.6" transform="rotate(-20 232 82)" fill="currentColor" /><line x1="235.4" y1="81.4" x2="235.4" y2="64" /><ellipse cx="72" cy="139" rx="3.6" ry="2.6" transform="rotate(-20 72 139)" fill="currentColor" /><line x1="75.4" y1="138.4" x2="75.4" y2="121" /><ellipse cx="104" cy="144" rx="3.6" ry="2.6" transform="rotate(-20 104 144)" /><line x1="107.4" y1="143.4" x2="107.4" y2="126" /><ellipse cx="136" cy="134" rx="3.6" ry="2.6" transform="rotate(-20 136 134)" fill="currentColor" /><line x1="139.4" y1="133.4" x2="139.4" y2="116" /><ellipse cx="170" cy="129" rx="3.6" ry="2.6" transform="rotate(-20 170 129)" fill="currentColor" /><line x1="166.6" y1="129.6" x2="166.6" y2="147" /><ellipse cx="206" cy="139" rx="3.6" ry="2.6" transform="rotate(-20 206 139)" /><line x1="209.4" y1="138.4" x2="209.4" y2="121" /><ellipse cx="246" cy="144" rx="3.6" ry="2.6" transform="rotate(-20 246 144)" fill="currentColor" /><line x1="249.4" y1="143.4" x2="249.4" y2="126" /></g></svg>
-              <h3 class="label" id="about-outside">Outside of code</h3>
-              <p>
-                I read a lot, mostly philosophy and psychology, and there's almost always music on while I work. That's where the vinyl theme comes from.
-              </p>
-            </section>
-            <section class="about-tile about-tile--work" aria-labelledby="about-work">
-              <!-- about-photo-4 -->
-              <svg class="about-motif" viewBox="0 0 120 90" aria-hidden="true" focusable="false"><g fill="none" stroke="currentColor" stroke-width="1" stroke-linecap="round" stroke-linejoin="round"><circle cx="60" cy="45" r="40" /><circle cx="60" cy="45" r="2.5" /><polygon points="60,12 66,45 54,45" /><polygon points="60,78 66,45 54,45" /><line x1="60" y1="2" x2="60" y2="8" /><line x1="60" y1="82" x2="60" y2="88" /><line x1="14" y1="45" x2="20" y2="45" /><line x1="100" y1="45" x2="106" y2="45" /></g></svg>
-              <h3 class="label" id="about-work">How I work</h3>
-              <p>
-                I'm still early, so I'd rather be straight about it. JobCompass was a hackathon project where I built the full app and a teammate prepared the dataset we checked it against. I can take an idea to a working, deployed app and pick up what a project needs, which is why I've used React, FastAPI, Django, Next.js and Node.
-              </p>
-            </section>
+              <section
+                class="about-tile about-tile--hello"
+                aria-labelledby="about-hello"
+              >
+                <!-- about-photo-1 -->
+                <svg
+                  class="about-motif"
+                  viewBox="0 0 120 90"
+                  aria-hidden="true"
+                  focusable="false"
+                >
+                  <g
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="1"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                  >
+                    <line x1="8" y1="14" x2="112" y2="14" />
+                    <line x1="8" y1="28" x2="96" y2="28" />
+                    <line x1="8" y1="42" x2="108" y2="42" />
+                    <line x1="8" y1="56" x2="80" y2="56" />
+                    <line x1="8" y1="70" x2="100" y2="70" />
+                    <line x1="8" y1="84" x2="64" y2="84" />
+                  </g>
+                </svg>
+                <h3 class="label" id="about-hello">Hello</h3>
+                <p>
+                  I'm Nhi, a third-year Software Engineering student at the
+                  University of Sydney. I like building small, practical web
+                  apps, and I'm looking for a software internship where I can
+                  keep learning from people who build things for real users.
+                </p>
+              </section>
+              <section
+                class="about-tile about-tile--build"
+                aria-labelledby="about-build"
+              >
+                <!-- about-photo-2 -->
+                <svg
+                  class="about-motif"
+                  viewBox="0 0 120 90"
+                  aria-hidden="true"
+                  focusable="false"
+                >
+                  <g
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="1"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                  >
+                    <line x1="6" y1="84" x2="114" y2="84" />
+                    <rect x="12" y="58" width="13" height="26" rx="1.5" />
+                    <rect x="32" y="40" width="13" height="44" rx="1.5" />
+                    <rect x="52" y="50" width="13" height="34" rx="1.5" />
+                    <rect x="72" y="22" width="13" height="62" rx="1.5" />
+                    <rect x="92" y="34" width="13" height="50" rx="1.5" />
+                  </g>
+                </svg>
+                <h3 class="label" id="about-build">What I build</h3>
+                <p>
+                  Most of my projects started with a small annoyance: free
+                  Discord music bots that started charging, budgets that never
+                  lasted the month, and job ads that only mention "PR or
+                  citizens" at the very end. So I built a music bot, an expense
+                  tracker and JobCompass.
+                </p>
+              </section>
+              <section
+                class="about-tile about-tile--outside"
+                aria-labelledby="about-outside"
+              >
+                <!-- about-photo-3 -->
+                <svg
+                  class="about-motif about-motif--staff"
+                  viewBox="0 0 320 170"
+                  aria-hidden="true"
+                  focusable="false"
+                >
+                  <g
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="1"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                  >
+                    <line x1="0" y1="20" x2="320" y2="20" />
+                    <line x1="0" y1="25" x2="320" y2="25" />
+                    <line x1="0" y1="30" x2="320" y2="30" />
+                    <line x1="0" y1="35" x2="320" y2="35" />
+                    <line x1="0" y1="40" x2="320" y2="40" />
+                    <line x1="2" y1="20" x2="2" y2="40" />
+                    <line x1="0" y1="72" x2="320" y2="72" />
+                    <line x1="0" y1="77" x2="320" y2="77" />
+                    <line x1="0" y1="82" x2="320" y2="82" />
+                    <line x1="0" y1="87" x2="320" y2="87" />
+                    <line x1="0" y1="92" x2="320" y2="92" />
+                    <line x1="2" y1="72" x2="2" y2="92" />
+                    <line x1="0" y1="124" x2="320" y2="124" />
+                    <line x1="0" y1="129" x2="320" y2="129" />
+                    <line x1="0" y1="134" x2="320" y2="134" />
+                    <line x1="0" y1="139" x2="320" y2="139" />
+                    <line x1="0" y1="144" x2="320" y2="144" />
+                    <line x1="2" y1="124" x2="2" y2="144" />
+                    <path
+                      d="M24 8 C37 18 33 36 22 44 C9 53 15 66 25 61 C32 57 28 47 20 49 M24 8 L22 74 C22 81 14 80 14 74"
+                    />
+                    <path
+                      d="M24 60 C37 70 33 88 22 96 C9 105 15 118 25 113 C32 109 28 99 20 101 M24 60 L22 126 C22 133 14 132 14 126"
+                    />
+                    <path
+                      d="M24 112 C37 122 33 140 22 148 C9 157 15 170 25 165 C32 161 28 151 20 153 M24 112 L22 178 C22 185 14 184 14 178"
+                    />
+                    <ellipse
+                      cx="70"
+                      cy="35"
+                      rx="3.6"
+                      ry="2.6"
+                      transform="rotate(-20 70 35)"
+                      fill="currentColor"
+                    />
+                    <line x1="73.4" y1="34.4" x2="73.4" y2="17" />
+                    <ellipse
+                      cx="98"
+                      cy="30"
+                      rx="3.6"
+                      ry="2.6"
+                      transform="rotate(-20 98 30)"
+                    />
+                    <line x1="101.4" y1="29.4" x2="101.4" y2="12" />
+                    <ellipse
+                      cx="126"
+                      cy="40"
+                      rx="3.6"
+                      ry="2.6"
+                      transform="rotate(-20 126 40)"
+                      fill="currentColor"
+                    />
+                    <line x1="129.4" y1="39.4" x2="129.4" y2="22" />
+                    <ellipse
+                      cx="160"
+                      cy="25"
+                      rx="3.6"
+                      ry="2.6"
+                      transform="rotate(-20 160 25)"
+                      fill="currentColor"
+                    />
+                    <line x1="156.6" y1="25.6" x2="156.6" y2="43" />
+                    <ellipse
+                      cx="190"
+                      cy="35"
+                      rx="3.6"
+                      ry="2.6"
+                      transform="rotate(-20 190 35)"
+                    />
+                    <line x1="193.4" y1="34.4" x2="193.4" y2="17" />
+                    <ellipse
+                      cx="228"
+                      cy="30"
+                      rx="3.6"
+                      ry="2.6"
+                      transform="rotate(-20 228 30)"
+                      fill="currentColor"
+                    />
+                    <line x1="231.4" y1="29.4" x2="231.4" y2="12" />
+                    <ellipse
+                      cx="262"
+                      cy="22.5"
+                      rx="3.6"
+                      ry="2.6"
+                      transform="rotate(-20 262 22.5)"
+                      fill="currentColor"
+                    />
+                    <line x1="258.6" y1="23.1" x2="258.6" y2="40.5" />
+                    <ellipse
+                      cx="66"
+                      cy="87"
+                      rx="3.6"
+                      ry="2.6"
+                      transform="rotate(-20 66 87)"
+                    />
+                    <line x1="69.4" y1="86.4" x2="69.4" y2="69" />
+                    <ellipse
+                      cx="96"
+                      cy="82"
+                      rx="3.6"
+                      ry="2.6"
+                      transform="rotate(-20 96 82)"
+                      fill="currentColor"
+                    />
+                    <line x1="99.4" y1="81.4" x2="99.4" y2="64" />
+                    <ellipse
+                      cx="128"
+                      cy="92"
+                      rx="3.6"
+                      ry="2.6"
+                      transform="rotate(-20 128 92)"
+                      fill="currentColor"
+                    />
+                    <line x1="131.4" y1="91.4" x2="131.4" y2="74" />
+                    <ellipse
+                      cx="164"
+                      cy="77"
+                      rx="3.6"
+                      ry="2.6"
+                      transform="rotate(-20 164 77)"
+                    />
+                    <line x1="160.6" y1="77.6" x2="160.6" y2="95" />
+                    <ellipse
+                      cx="196"
+                      cy="87"
+                      rx="3.6"
+                      ry="2.6"
+                      transform="rotate(-20 196 87)"
+                      fill="currentColor"
+                    />
+                    <line x1="199.4" y1="86.4" x2="199.4" y2="69" />
+                    <ellipse
+                      cx="232"
+                      cy="82"
+                      rx="3.6"
+                      ry="2.6"
+                      transform="rotate(-20 232 82)"
+                      fill="currentColor"
+                    />
+                    <line x1="235.4" y1="81.4" x2="235.4" y2="64" />
+                    <ellipse
+                      cx="72"
+                      cy="139"
+                      rx="3.6"
+                      ry="2.6"
+                      transform="rotate(-20 72 139)"
+                      fill="currentColor"
+                    />
+                    <line x1="75.4" y1="138.4" x2="75.4" y2="121" />
+                    <ellipse
+                      cx="104"
+                      cy="144"
+                      rx="3.6"
+                      ry="2.6"
+                      transform="rotate(-20 104 144)"
+                    />
+                    <line x1="107.4" y1="143.4" x2="107.4" y2="126" />
+                    <ellipse
+                      cx="136"
+                      cy="134"
+                      rx="3.6"
+                      ry="2.6"
+                      transform="rotate(-20 136 134)"
+                      fill="currentColor"
+                    />
+                    <line x1="139.4" y1="133.4" x2="139.4" y2="116" />
+                    <ellipse
+                      cx="170"
+                      cy="129"
+                      rx="3.6"
+                      ry="2.6"
+                      transform="rotate(-20 170 129)"
+                      fill="currentColor"
+                    />
+                    <line x1="166.6" y1="129.6" x2="166.6" y2="147" />
+                    <ellipse
+                      cx="206"
+                      cy="139"
+                      rx="3.6"
+                      ry="2.6"
+                      transform="rotate(-20 206 139)"
+                    />
+                    <line x1="209.4" y1="138.4" x2="209.4" y2="121" />
+                    <ellipse
+                      cx="246"
+                      cy="144"
+                      rx="3.6"
+                      ry="2.6"
+                      transform="rotate(-20 246 144)"
+                      fill="currentColor"
+                    />
+                    <line x1="249.4" y1="143.4" x2="249.4" y2="126" />
+                  </g>
+                </svg>
+                <h3 class="label" id="about-outside">Outside of code</h3>
+                <p>
+                  I read a lot, mostly philosophy and psychology, and there's
+                  almost always music on while I work. That's where the vinyl
+                  theme comes from.
+                </p>
+              </section>
+              <section
+                class="about-tile about-tile--work"
+                aria-labelledby="about-work"
+              >
+                <!-- about-photo-4 -->
+                <svg
+                  class="about-motif"
+                  viewBox="0 0 120 90"
+                  aria-hidden="true"
+                  focusable="false"
+                >
+                  <g
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="1"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                  >
+                    <circle cx="60" cy="45" r="40" />
+                    <circle cx="60" cy="45" r="2.5" />
+                    <polygon points="60,12 66,45 54,45" />
+                    <polygon points="60,78 66,45 54,45" />
+                    <line x1="60" y1="2" x2="60" y2="8" />
+                    <line x1="60" y1="82" x2="60" y2="88" />
+                    <line x1="14" y1="45" x2="20" y2="45" />
+                    <line x1="100" y1="45" x2="106" y2="45" />
+                  </g>
+                </svg>
+                <h3 class="label" id="about-work">How I work</h3>
+                <p>
+                  I'm still early, so I'd rather be straight about it.
+                  JobCompass was a hackathon project where I built the full app
+                  and a teammate prepared the dataset we checked it against. I
+                  can take an idea to a working, deployed app and pick up what a
+                  project needs, which is why I've used React, FastAPI, Django,
+                  Next.js and Node.
+                </p>
+              </section>
             </div>
           </div>
         </div>
@@ -176,7 +549,8 @@
 
       <section
         class="page-section contact"
-        id="contact" data-view="home"
+        id="contact"
+        data-view="home"
         aria-labelledby="contact-title"
       >
         <h2 id="contact-title">Contact</h2>
