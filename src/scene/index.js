@@ -20,8 +20,9 @@ import * as K from "./tweaks.js"; // all the tweakable numbers live in tweaks.js
 //
 // `covers` is [{ template, color, title, side, year }] in project order.
 // Callbacks: onHover(index | -1), onSelect(index) from the pointer,
-// onStateChange(state, index) whenever the state changes.
-export async function createShelfScene({ canvas, covers, onHover, onSelect, onStateChange }) {
+// onStateChange(state, index) whenever the state changes, and onPanel(index, amount 0..1)
+// while the info panel of that record should fade in / out (it is part of the timeline).
+export async function createShelfScene({ canvas, covers, onHover, onSelect, onStateChange, onPanel }) {
   const reduceMotion = matchMedia("(prefers-reduced-motion: reduce)").matches;
   const compactQuery = matchMedia(K.COMPACT.query);
   let compact = compactQuery.matches;
@@ -32,7 +33,7 @@ export async function createShelfScene({ canvas, covers, onHover, onSelect, onSt
   renderer.outputColorSpace = THREE.SRGBColorSpace;
   renderer.toneMapping = THREE.NoToneMapping;
   renderer.shadowMap.enabled = true; // only the turntable and record cast / receive shadows
-  renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+  renderer.shadowMap.type = THREE.PCFShadowMap;
   renderer.autoClear = false; // two passes per frame, see frame()
 
   const scene = new THREE.Scene();
@@ -364,12 +365,14 @@ export async function createShelfScene({ canvas, covers, onHover, onSelect, onSt
     record.setReflections(THREE.MathUtils.lerp(look.nearStack, 1, Math.pow(fade, look.curve)));
 
     turntable.setTonearm(p.needle);
+    onPanel?.(index, p.panel);
     applyCamera();
     if (devSlider) devSlider.value = current.tl.progress();
   }
 
   // Throws the record away and puts the sleeves back to normal
   function retire(c) {
+    onPanel?.(c.index, 0);
     c.tl.kill();
     scene.remove(c.record);
     c.record.dispose(); // records are created per pick and thrown away afterwards
@@ -495,7 +498,11 @@ export async function createShelfScene({ canvas, covers, onHover, onSelect, onSt
 
   // Jump to the end of whatever is running (Esc, or a click anywhere)
   function skip() {
-    if (state !== "transitioning" || !current || reduceMotion) return;
+    if (!reduceMotion) finishMotion();
+  }
+
+  function finishMotion() {
+    if (state !== "transitioning" || !current) return;
     const c = current;
     if (c.tl.reversed()) {
       c.tl.progress(0, false); // eject: done. swap: the new record's timeline starts...
@@ -505,6 +512,24 @@ export async function createShelfScene({ canvas, covers, onHover, onSelect, onSt
     }
   }
 
+  // Go straight to a state without animating: the URL changed (#/projects/<slug>, back / forward).
+  // index -1 = the stack, otherwise that record is on the turntable.
+  function jumpTo(index) {
+    finishMotion();
+    if (state === "playing") {
+      if (current.index === index) return;
+      const c = current;
+      setState("transitioning", c.index);
+      c.tl.timeScale(1);
+      c.tl.eventCallback("onReverseComplete", () => finishEject(c));
+      c.tl.progress(0, false);
+    }
+    if (index >= 0 && state === "stack" && sleeves[index]) {
+      gsap.killTweensOf(sleeves.map((s) => s.state));
+      setState("transitioning", index);
+      beginPick(index).progress(1, false);
+    }
+  }
   // ---- Render loop (runs only while the canvas is on screen and the tab is visible) ----
   let raf = 0;
   let onScreen = true;
@@ -660,6 +685,7 @@ export async function createShelfScene({ canvas, covers, onHover, onSelect, onSt
     swap,
     eject,
     skip,
+    jumpTo,
     getState: () => state,
     dispose() {
       disposed = true;

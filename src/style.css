@@ -513,7 +513,159 @@ h2 {
   display: inline-block;
 }
 
+/* Info panel: the right column on wide screens (src/shelf.js places it level with the scene),
+   in the page flow under the turntable on narrow ones. Its opacity and --slide are set by the
+   scene's timeline, so there is no CSS transition for it (except with reduced motion, below). */
+.info {
+  position: absolute;
+  display: flex;
+  align-items: flex-start;
+  pointer-events: none;
+}
+
+.shelf .panel {
+  pointer-events: auto;
+  width: 100%;
+  padding: 0.25rem 0;
+  transform: translateX(var(--slide, 0));
+  color: var(--text);
+}
+
+.panel[hidden] {
+  display: none;
+}
+
+.panel > * {
+  margin: 0;
+}
+
+.panel-side {
+  margin-bottom: 0.6rem;
+}
+
+.panel-title {
+  margin-bottom: 0.9rem;
+  font-weight: 400;
+  font-size: clamp(1.9rem, 2.8vw, 2.5rem);
+  line-height: 1.05;
+  outline: none;
+}
+
+.panel-title:focus-visible {
+  outline: 1px solid var(--muted);
+  outline-offset: 6px;
+}
+
+.panel-desc {
+  margin-bottom: 1.2rem;
+  font-size: 1rem;
+  line-height: 1.45;
+  color: #cfcfcf;
+}
+
+.panel-heading {
+  margin-bottom: 0.6rem;
+  padding-top: 0.9rem;
+  border-top: 1px solid var(--line);
+}
+
+.tracks-detail {
+  display: grid;
+  gap: 0.7rem;
+  margin: 0 0 1.1rem;
+  padding: 0;
+  list-style: none;
+}
+
+.tracks-detail li {
+  display: grid;
+  grid-template-columns: 2rem 1fr;
+  gap: 0.25rem 0.5rem;
+}
+
+.track-no {
+  padding-top: 0.15rem;
+}
+
+.track-name {
+  margin: 0 0 0.15rem;
+  color: var(--text);
+}
+
+.track-text {
+  margin: 0;
+  font-size: 0.95rem;
+  line-height: 1.4;
+  color: #b4b4b4;
+}
+
+.panel .stack {
+  margin-bottom: 1rem;
+  text-transform: none;
+  letter-spacing: 0.04em;
+}
+
+.panel-links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.6rem;
+}
+
+.panel .button {
+  margin: 0;
+  padding: 0.45rem 1.1rem;
+  font-family: var(--mono);
+  font-size: 0.8rem;
+  letter-spacing: 0.06em;
+  background: none;
+  color: var(--text);
+  cursor: pointer;
+}
+
+.panel .button:hover {
+  background: var(--text);
+  color: var(--bg);
+}
+
+.panel :is(a, button):focus-visible {
+  outline: 2px solid var(--text);
+  outline-offset: 4px;
+}
+
+/* The list view shows the same tracklist */
+.card-tracks {
+  margin: 0.25rem 0 0.25rem;
+  padding: 0;
+  list-style: none;
+  display: grid;
+  gap: 0.5rem;
+  font-size: 0.95rem;
+  line-height: 1.4;
+  color: #b4b4b4;
+}
+
+.card-tracks .label {
+  display: block;
+}
+
+@media (max-width: 48rem) {
+  .info {
+    position: static;
+    display: block;
+    margin-top: 0;
+  }
+
+  .shelf .panel {
+    transform: translateY(var(--slide, 0));
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
+  /* No slide: just a quick change of opacity */
+  .shelf .panel {
+    transition: opacity 0.2s ease !important;
+  }
+
   * {
     transition: none !important;
   }

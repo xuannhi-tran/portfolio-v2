@@ -107,7 +107,7 @@ export function renderTracks(projects) {
     let group = sides.find((s) => s.side === p.side);
     if (!group) sides.push((group = { side: p.side, items: [] }));
     group.items.push(`            <li>
-              <button type="button" class="track" data-index="${i}" aria-pressed="false">
+              <button type="button" class="track" data-index="${i}" data-slug="${escapeHtml(p.slug)}" aria-pressed="false">
                 <span class="track-title">${escapeHtml(p.title)}</span>
                 <span class="track-year label">${escapeHtml(p.year)}</span>
               </button>
@@ -123,5 +123,48 @@ ${s.items.join("\n")}
           </ul>
         </div>`,
     )
+    .join("\n");
+}
+// The info panel for every project (shown one at a time on the right while a record plays).
+// Real HTML written at build time; src/shelf.js only shows and hides it.
+export function renderPanels(projects) {
+  return projects
+    .map((p, i) => {
+      const links = [
+        p.demoUrl
+          ? `<a class="button" href="${escapeHtml(p.demoUrl)}" target="_blank" rel="noopener noreferrer">Live demo</a>`
+          : "",
+        p.repoUrl
+          ? `<a class="button" href="${escapeHtml(p.repoUrl)}" target="_blank" rel="noopener noreferrer">Repo</a>`
+          : "",
+        `<button type="button" class="button panel-back">Back to crate</button>`,
+      ]
+        .filter(Boolean)
+        .join("\n            ");
+      const tracks = (p.tracks ?? [])
+        .map(
+          (t, n) => `<li>
+              <span class="track-no label">${String(n + 1).padStart(2, "0")}</span>
+              <div>
+                <p class="track-name label">${escapeHtml(t.name)}</p>
+                <p class="track-text">${escapeHtml(t.text)}</p>
+              </div>
+            </li>`,
+        )
+        .join("\n            ");
+      return `      <section class="panel" data-index="${i}" data-slug="${escapeHtml(p.slug)}" aria-labelledby="panel-title-${escapeHtml(p.slug)}" hidden>
+          <p class="label panel-side">Side ${escapeHtml(p.side)} · ${escapeHtml(p.year)}</p>
+          <h3 class="panel-title" id="panel-title-${escapeHtml(p.slug)}" tabindex="-1">${escapeHtml(p.title)}</h3>
+          <p class="panel-desc">${escapeHtml(p.description)}</p>
+          <h4 class="label panel-heading">Tracklist</h4>
+          <ol class="tracks-detail">
+            ${tracks}
+          </ol>
+          <p class="stack label">${escapeHtml(p.stack)}</p>
+          <div class="panel-links">
+            ${links}
+          </div>
+        </section>`;
+    })
     .join("\n");
 }

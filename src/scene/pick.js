@@ -17,8 +17,9 @@ import { TIMING, EASE } from "./tweaks.js";
 //   p.lower   0 -> 1   record lowers onto the spindle (may overshoot slightly)
 //   p.needle  0 -> 1   tonearm rest -> playing
 //   p.spin    0 -> 1   platter speed (1 = the calm base speed)
+//   p.panel   0 -> 1   the info panel fades in (so it fades out first on eject / swap)
 export function createPickProgress() {
-  return { bob: 1, settle: 0, dim: 0, slide: 0, arc: 0, leave: 0, camera: 0, lower: 0, needle: 0, spin: 0 };
+  return { bob: 1, settle: 0, dim: 0, slide: 0, arc: 0, leave: 0, camera: 0, lower: 0, needle: 0, spin: 0, panel: 0 };
 }
 
 export function createPickTimeline(p, update) {
@@ -37,5 +38,6 @@ export function createPickTimeline(p, update) {
   step("lower", 1);
   step("needle", 1);
   step("spin", 1);
+  step("panel", 1);
   return tl;
 }

@@ -9,8 +9,13 @@
 //    on wide screens the 3D sleeves on the left (plus visually hidden buttons for keyboard
 //    and screen readers), on narrow screens a row of thumbnail buttons. "← All records"
 //    (or Esc) puts the record back and returns to the stack.
+//  - The info panel of the playing record fades in on the right (below the turntable on narrow
+//    screens); its fade is part of the scene's timeline, so it fades out first on eject / swap.
+//
+// Routes: #/projects (the stack) and #/projects/<slug> (that record playing). Picking, swapping and
+// ejecting update the hash; opening a URL, back and forward jump straight to the state, no animation.
 
-import { COMPACT } from "./scene/tweaks.js";
+import { COMPACT, PANEL } from "./scene/tweaks.js";
 
 const shelf = document.querySelector(".shelf");
 const crate = document.querySelector(".crate");
@@ -19,6 +24,13 @@ const canvas = document.getElementById("scene");
 const status = document.getElementById("shelf-status");
 const ejectButton = document.getElementById("eject");
 const compactQuery = matchMedia(COMPACT.query);
+const reducedMotion = () => matchMedia("(prefers-reduced-motion: reduce)").matches;
+const info = document.getElementById("info");
+const panels = [...document.querySelectorAll(".panel")].sort((a, b) => a.dataset.index - b.dataset.index);
+const slugs = tracks.map((t) => t.dataset.slug);
+const hashFor = (i) => (i >= 0 ? `#/projects/${slugs[i]}` : "#/projects");
+let wantedSlug = null; // from the URL
+let routing = false; // true while the URL (not the user) is changing the state
 
 let active = -1; // hovered / focused item
 let picked = -1; // the record that is playing (or on its way)
@@ -80,6 +92,54 @@ function wireItem(el, i) {
   el.addEventListener("click", () => requestPick(i));
 }
 
+// ---- The info panel ---------------------------------------------------------
+// Wide screens: in the right column, level with the scene. Narrow screens: in the page flow,
+// pulled up under the row of thumbnails.
+function placePanel() {
+  if (!info) return;
+  if (compactQuery.matches) {
+    const w = crate.getBoundingClientRect().width;
+    const h = crate.getBoundingClientRect().height;
+    const thumbSize = (w - 24) / 3;
+    const free = h - (h * 0.58 + thumbSize); // empty space left under the thumbnails in the crate
+    info.style.cssText = `margin-top: ${-Math.max(0, free - 24)}px`;
+    return;
+  }
+  const shelfRect = shelf.getBoundingClientRect();
+  const crateRect = crate.getBoundingClientRect();
+  const viewport = document.documentElement.clientWidth;
+  const width = Math.min(PANEL.maxWidth, viewport * PANEL.widthFraction);
+  info.style.cssText = [
+    `left: ${viewport - width - PANEL.margin - shelfRect.left}px`,
+    `top: ${crateRect.top - shelfRect.top}px`,
+    `width: ${width}px`,
+    `height: ${crateRect.height}px`,
+  ].join(";");
+}
+
+// Called by the scene while a record's panel fades in or out (amount 0..1)
+function onPanel(index, amount) {
+  const reduce = reducedMotion();
+  panels.forEach((panel, i) => {
+    const visible = i === index && amount > 0.001;
+    if (!visible) {
+      panel.hidden = true;
+      return;
+    }
+    const wasHidden = panel.hidden;
+    panel.hidden = false;
+    if (wasHidden) placePanel();
+    panel.style.setProperty("--slide", reduce ? "0px" : `${(1 - amount) * PANEL.slide}px`);
+    if (reduce && wasHidden) {
+      // Reduced motion: no slide, just a quick opacity change (see the CSS transition)
+      panel.style.opacity = "0";
+      requestAnimationFrame(() => (panel.style.opacity = String(amount)));
+    } else {
+      panel.style.opacity = String(amount);
+    }
+  });
+}
+
 // ---- State ------------------------------------------------------------------
 function render() {
   shelf.dataset.state = uiState;
@@ -139,12 +199,17 @@ function onStateChange(next, index) {
   if (next === "transitioning") {
     transitionStart = performance.now();
     active = -1;
+    if (!routing) {
+      // The URL follows what the user does (picking, swapping and ejecting add history entries)
+      const target = hashFor(lastAction === "eject" ? -1 : index);
+      if (location.hash !== target) history.pushState(null, "", target);
+    }
     if (previous === "stack") {
       picked = index;
       // Bring the scene into view: the stack's column, or the top of it on narrow screens
       crate.scrollIntoView({
         block: compactQuery.matches ? "start" : "center",
-        behavior: matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth",
+        behavior: routing || reducedMotion() ? "auto" : "smooth",
       });
     }
   }
@@ -155,17 +220,18 @@ function onStateChange(next, index) {
   render(); // first, so the controls are visible and can take focus
 
   if (next === "playing") {
-    if (lastAction === "swap") focusNextPlayable(index);
-    else ejectButton?.focus({ preventScroll: true });
+    placePanel();
+    if (lastAction === "swap" && !routing) focusNextPlayable(index);
+    else panels[index]?.querySelector(".panel-title")?.focus({ preventScroll: true }); // the panel just opened
   }
-  if (next === "stack" && previous !== "stack") {
+  if (next === "stack" && previous !== "stack" && !routing) {
     // The heading and the list are back: scroll up to them
     window.scrollTo({
       top: 0,
       behavior: matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth",
     });
   }
-  if (next === "stack" && (document.activeElement === ejectButton || document.activeElement === document.body)) {
+  if (next === "stack" && !routing && (document.activeElement.closest?.(".panel") || document.activeElement === ejectButton || document.activeElement === document.body)) {
     // Back where we started: return keyboard focus to the record that was picked
     tracks[wasPicked]?.focus({ preventScroll: true });
   }
@@ -176,7 +242,12 @@ export function initShelf() {
 
   tracks.forEach((track, i) => wireItem(track, i));
   ejectButton?.addEventListener("click", requestEject);
-  compactQuery.addEventListener("change", render);
+  panels.forEach((panel) => panel.querySelector(".panel-back")?.addEventListener("click", requestEject));
+  compactQuery.addEventListener("change", () => {
+    render();
+    placePanel();
+  });
+  window.addEventListener("resize", placePanel);
 
   document.addEventListener("keydown", (e) => {
     if (e.key !== "Escape" || !scene) return;
@@ -213,6 +284,7 @@ export async function enterShelf() {
       onHover: setActive,
       onSelect: requestPick,
       onStateChange,
+      onPanel,
     });
 
     if (!entered) {
@@ -221,6 +293,7 @@ export async function enterShelf() {
     }
     scene = created;
     render();
+    applyRoute();
   } catch (err) {
     console.warn("3D shelf unavailable, showing the list instead.", err);
     fallBackToList();
@@ -229,10 +302,31 @@ export async function enterShelf() {
 
 export function leaveShelf() {
   entered = false;
+  wantedSlug = null;
   scene?.dispose();
   scene = null;
   active = -1;
   picked = -1;
   uiState = "stack";
   render();
+}
+
+// ---- Routes -------------------------------------------------------------------
+// Make the shelf match the URL: slug = "rag" etc. opens that record, null = the stack.
+// Called when the route changes (a fresh tab, back / forward, the nav link).
+export function syncShelfRoute(slug) {
+  wantedSlug = slug;
+  applyRoute();
+}
+
+function applyRoute() {
+  if (!scene) return; // applied as soon as the scene exists
+  let index = wantedSlug ? slugs.indexOf(wantedSlug) : -1;
+  if (wantedSlug && index === -1) {
+    history.replaceState(null, "", "#/projects"); // unknown slug: back to the stack
+    index = -1;
+  }
+  routing = true;
+  scene.jumpTo(index);
+  routing = false;
 }

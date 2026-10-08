@@ -1,8 +1,9 @@
-// Hash routes: #/ (cover, about, contact), #/projects (record shelf), #/list (static cards).
+// Hash routes: #/ (cover, about, contact), #/projects (record shelf), #/projects/<slug> (that record
+// playing), #/list (static cards).
 // Plain #about / #contact links keep working and scroll within the home view.
 // Without JS every section is visible, so the content stays readable.
 
-import { initShelf, enterShelf, leaveShelf } from "./shelf.js";
+import { initShelf, enterShelf, leaveShelf, syncShelfRoute } from "./shelf.js";
 
 const views = document.querySelectorAll("[data-view]");
 const projectsLink = document.querySelector('[data-nav="projects"]');
@@ -32,8 +33,13 @@ function route() {
     }
   }
 
+  let slug = null;
+  const project = hash.match(/^#\/projects\/([\w-]+)$/);
   if (hash === "#/projects") {
     view = "shelf";
+  } else if (project) {
+    view = "shelf";
+    slug = project[1]; // an unknown slug is sent back to #/projects by the shelf
   } else if (hash === "#/list") {
     view = "list";
   } else if (hash === "#projects") {
@@ -58,8 +64,12 @@ function route() {
   else window.scrollTo(0, 0);
 
   // The 3D scene only exists while the shelf is on screen.
-  if (view === "shelf") enterShelf();
-  else leaveShelf();
+  if (view === "shelf") {
+    enterShelf();
+    syncShelfRoute(slug);
+  } else {
+    leaveShelf();
+  }
 }
 
 initShelf();

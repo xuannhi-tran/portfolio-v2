@@ -33,7 +33,7 @@ export const RECORD_TO_SLEEVE = 0.96; // record diameter / sleeve width (12" in 
 // and whatever is right of the turntable stays free for an info panel.
 export const PLAYING_LAYOUT = {
   stackX: 0.13,
-  tableX: 0.55,
+  tableX: 0.52,
   offsetY: 0, // px: nudge the whole playing picture down (+) or up (-)
 };
 // Narrow screens (matches the CSS breakpoint): the turntable fills the top of the stack's
@@ -71,6 +71,7 @@ export const TIMING = {
   lower: { at: 2.3, duration: 0.5 }, // record lowers onto the spindle
   needle: { at: 2.75, duration: 0.8 }, // tonearm swings from rest to playing
   spin: { at: 2.95, duration: 0.8 }, // platter spins up to the calm speed
+  panel: { at: 3.05, duration: 0.55 }, // the info panel fades / slides in once the record is seated and the platter is turning (and out first when it is ejected)
 };
 export const EASE = {
   bob: "power1.out",
@@ -84,6 +85,15 @@ export const EASE = {
   lower: "power2.out", // smooth deceleration, never below the seated position (no overshoot, so lifting back up never dips either)
   needle: "power2.inOut",
   spin: "power2.out",
+  panel: "power2.out",
+};
+
+// Info panel (src/shelf.js)
+export const PANEL = {
+  slide: 28, // px the panel slides in from (to the right, or up from below on narrow screens); reduced motion: no slide
+  maxWidth: 400, // px, wide screens
+  widthFraction: 0.28, // of the viewport width, wide screens (the smaller of the two wins)
+  margin: 24, // px from the right edge of the screen
 };
 
 // Swapping records plays the current record's timeline backwards and the new one's forwards,

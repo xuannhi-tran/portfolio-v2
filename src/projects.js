@@ -1,10 +1,17 @@
 // All project data lives here. Edit this file to change the cards.
 // Leave demoUrl as "" and no "Live demo" link is shown.
-// cover.color / cover.motif style the album sleeve on the shelf
+// slug is used in the URL (#/projects/<slug>); tracks fill the "Tracklist" in the info panel
+// and in the list view. cover.color / cover.motif style the album sleeve on the shelf
 // (motif: "document" | "bars" | "compass" | "wave").
 export const projects = [
   {
     title: "RAG Document Assistant",
+    slug: "rag",
+    tracks: [
+      { name: "What it does", text: "Upload your PDFs, ask questions in any language, and get answers based on your own documents." },
+      { name: "The tricky part", text: "Getting answers to stick to the uploaded documents instead of the model making things up. Chunking the text and searching with pgvector took most of the tuning." },
+      { name: "What I learned", text: "How retrieval works end to end: embeddings, vector search, and feeding the right context to Gemini." },
+    ],
     cover: { color: "#3b4a5a", motif: "document" },
     side: "A",
     year: 2026,
@@ -16,6 +23,12 @@ export const projects = [
   },
   {
     title: "Expense Tracker",
+    slug: "expense-tracker",
+    tracks: [
+      { name: "What it does", text: "Log what you spend, see where it goes, and keep track of your budget for the month." },
+      { name: "The tricky part", text: "Designing the data model so categories and monthly summaries stay simple to query." },
+      { name: "What I learned", text: "Building a full app from scratch: React frontend, a Django REST API, PostgreSQL, and deploying it." },
+    ],
     cover: { color: "#4a5a3f", motif: "bars" },
     side: "A",
     year: 2026,
@@ -27,6 +40,12 @@ export const projects = [
   },
   {
     title: "JobCompass",
+    slug: "jobcompass",
+    tracks: [
+      { name: "What it does", text: "Reads a job ad and tells you whether to apply, tailor your application, or skip." },
+      { name: "The tricky part", text: "Turning messy job ad text into clear rules, like spotting \"PR or citizens only\", and checking the results against a holdout dataset instead of just trusting them." },
+      { name: "What I learned", text: "A rule-based engine is easier to explain and debug than a black box. I built the whole app myself, and a teammate prepared the ground-truth dataset." },
+    ],
     cover: { color: "#6b4a3a", motif: "compass" },
     side: "A",
     year: 2026,
@@ -38,6 +57,12 @@ export const projects = [
   },
   {
     title: "Discord Music Bot",
+    slug: "music-bot",
+    tracks: [
+      { name: "What it does", text: "Plays YouTube links in voice chat with a queue, plus play, pause, resume, skip and stop commands." },
+      { name: "The tricky part", text: "Streaming audio live: yt-dlp feeds ffmpeg, which converts it to raw audio for @discordjs/voice. The bot also needs a separate queue for each server." },
+      { name: "What I learned", text: "Working with audio streams and the Discord voice API, and building something my friends actually use." },
+    ],
     cover: { color: "#5a3f55", motif: "wave" },
     side: "B",
     year: 2025,
