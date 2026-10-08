@@ -15,7 +15,7 @@
 // Routes: #/projects (the stack) and #/projects/<slug> (that record playing). Picking, swapping and
 // ejecting update the hash; opening a URL, back and forward jump straight to the state, no animation.
 
-import { COMPACT, PANEL } from "./scene/tweaks.js";
+import { COMPACT, PANEL, SHOWCASE } from "./scene/tweaks.js";
 
 const shelf = document.querySelector(".shelf");
 const crate = document.querySelector(".crate");
@@ -26,6 +26,7 @@ const ejectButton = document.getElementById("eject");
 const compactQuery = matchMedia(COMPACT.query);
 const reducedMotion = () => matchMedia("(prefers-reduced-motion: reduce)").matches;
 const info = document.getElementById("info");
+const demoFrame = document.getElementById("demo-frame");
 const panels = [...document.querySelectorAll(".panel")].sort((a, b) => a.dataset.index - b.dataset.index);
 const slugs = tracks.map((t) => t.dataset.slug);
 const hashFor = (i) => (i >= 0 ? `#/projects/${slugs[i]}` : "#/projects");
@@ -122,13 +123,57 @@ function placePanel() {
   const shelfRect = shelf.getBoundingClientRect();
   const crateRect = crate.getBoundingClientRect();
   const viewport = document.documentElement.clientWidth;
-  const width = Math.min(PANEL.maxWidth, viewport * PANEL.widthFraction);
+  const width = panelWidth();
   info.style.cssText = [
     `left: ${viewport - width - PANEL.margin - shelfRect.left}px`,
     `top: ${crateRect.top - shelfRect.top}px`,
     `width: ${width}px`,
     `height: ${crateRect.height}px`,
   ].join(";");
+}
+
+const panelWidth = () => Math.min(PANEL.maxWidth, document.documentElement.clientWidth * PANEL.widthFraction);
+
+// ---- The showcase demo frame -------------------------------------------------
+// A placeholder window between the left stack and the info panel (never overlapping the panel).
+// It is laid out at its final size; the scene's showcase progress only drives its transform
+// (it grows from its right edge) and opacity.
+function placeFrame() {
+  if (!demoFrame || compactQuery.matches) return;
+  const F = SHOWCASE.frame;
+  const viewport = document.documentElement.clientWidth;
+  const left = viewport * F.left;
+  const right = viewport - panelWidth() - PANEL.margin - F.gap; // stays clear of the info panel
+  const width = Math.max(0, Math.min(viewport * F.widthFraction, right - left));
+  const shelfRect = shelf.getBoundingClientRect();
+  const crateRect = crate.getBoundingClientRect();
+  demoFrame.style.left = `${left + (right - left - width) / 2 - shelfRect.left}px`;
+  demoFrame.style.top = `${crateRect.top - shelfRect.top + F.top}px`;
+  demoFrame.style.width = `${width}px`;
+  demoFrame.style.height = `${width / F.aspect}px`;
+}
+
+// Called by the scene as the showcase moves (0 = the normal playing layout, 1 = the showcase)
+function onShowcase(progress) {
+  if (!demoFrame) return;
+  const F = SHOWCASE.frame;
+  const reduce = reducedMotion();
+  const visible = progress > 0.001 && !compactQuery.matches;
+  if (visible && demoFrame.hidden) {
+    demoFrame.hidden = false;
+    placeFrame();
+  }
+  if (!visible) {
+    demoFrame.hidden = true;
+    return;
+  }
+  if (reduce) {
+    demoFrame.style.transform = "none"; // no slide or scale, only the opacity changes (with a short CSS transition)
+    demoFrame.style.opacity = String(Math.min(1, progress * 2));
+  } else {
+    demoFrame.style.transform = `translateX(${(1 - progress) * F.slide}px) scale(${F.fromScale + (1 - F.fromScale) * progress})`;
+    demoFrame.style.opacity = String(Math.min(1, progress * 1.6));
+  }
 }
 
 // Called by the scene while a record's panel fades in or out (amount 0..1)
@@ -260,8 +305,12 @@ export function initShelf() {
   compactQuery.addEventListener("change", () => {
     render();
     placePanel();
+    if (compactQuery.matches && demoFrame) demoFrame.hidden = true;
   });
-  window.addEventListener("resize", placePanel);
+  window.addEventListener("resize", () => {
+    placePanel();
+    placeFrame();
+  });
 
   document.addEventListener("keydown", (e) => {
     if (e.key !== "Escape" || !scene) return;
@@ -299,6 +348,7 @@ export async function enterShelf() {
       onSelect: requestPick,
       onStateChange,
       onPanel,
+      onShowcase,
     });
 
     if (!entered) {

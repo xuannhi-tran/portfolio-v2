@@ -632,6 +632,57 @@ h2 {
   outline-offset: 4px;
 }
 
+/* Showcase: an empty placeholder "browser window" for the demo. src/shelf.js places it between the
+   left stack and the info panel, and its transform / opacity follow the scene's showcase progress. */
+.demo-frame {
+  position: absolute;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  border: 1px solid var(--line);
+  border-radius: 0.9rem;
+  background: rgba(255, 255, 255, 0.02);
+  transform-origin: 100% 50%; /* grows from its right edge */
+  pointer-events: auto;
+}
+
+.demo-frame[hidden] {
+  display: none;
+}
+
+.demo-bar {
+  flex: none;
+  display: flex;
+  align-items: center;
+  height: 2rem;
+  padding: 0 0.9rem;
+  border-bottom: 1px solid var(--line);
+  background: rgba(255, 255, 255, 0.04);
+}
+
+.demo-dots {
+  display: flex;
+  gap: 0.4rem;
+}
+
+.demo-dots i {
+  width: 0.55rem;
+  height: 0.55rem;
+  border-radius: 50%;
+  background: var(--line);
+}
+
+.demo-body {
+  flex: 1;
+  display: grid;
+  place-items: center;
+}
+
+@media (max-width: 48rem) {
+  .demo-frame {
+    display: none; /* narrow screens keep the stacked layout, no showcase */
+  }
+}
 /* The list view shows the same tracklist */
 .card-tracks {
   margin: 0.25rem 0 0.25rem;
@@ -662,7 +713,8 @@ h2 {
 
 @media (prefers-reduced-motion: reduce) {
   /* No slide: just a quick change of opacity */
-  .shelf .panel {
+  .shelf .panel,
+  .demo-frame {
     transition: opacity 0.2s ease !important;
   }
 

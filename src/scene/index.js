@@ -8,6 +8,8 @@ import {
   RECORD_SEATED_POSITION,
   RECORD_HOVER_POSITION,
   TURNTABLE_WIDTH,
+  PLATTER_CENTER,
+  PLATTER_RADIUS,
 } from "./turntable.js";
 import { createRecord, RECORD_RADIUS } from "./record.js";
 import { createPickProgress, createPickTimeline } from "./pick.js";
@@ -21,8 +23,9 @@ import * as K from "./tweaks.js"; // all the tweakable numbers live in tweaks.js
 // `covers` is [{ template, color, title, side, year }] in project order.
 // Callbacks: onHover(index | -1), onSelect(index) from the pointer,
 // onStateChange(state, index) whenever the state changes, and onPanel(index, amount 0..1)
-// while the info panel of that record should fade in / out (it is part of the timeline).
-export async function createShelfScene({ canvas, covers, onHover, onSelect, onStateChange, onPanel }) {
+// while the info panel of that record should fade in / out (it is part of the timeline), and
+// onShowcase(progress 0..1) while the showcase layout (see SHOWCASE in tweaks.js) moves.
+export async function createShelfScene({ canvas, covers, onHover, onSelect, onStateChange, onPanel, onShowcase }) {
   const reduceMotion = matchMedia("(prefers-reduced-motion: reduce)").matches;
   const compactQuery = matchMedia(K.COMPACT.query);
   let compact = compactQuery.matches;
@@ -160,7 +163,7 @@ export async function createShelfScene({ canvas, covers, onHover, onSelect, onSt
     });
   }
 
-  const groupActive = () => state === "playing" && !compact;
+  const groupActive = () => state === "playing" && !compact && !exiting;
   const isOpen = () => wantExpanded && collapseK.v < 0.5;
 
   function expand() {
@@ -189,14 +192,70 @@ export async function createShelfScene({ canvas, covers, onHover, onSelect, onSt
     collapseTimer = setTimeout(collapse, CS.hoverOutDelay * 1000);
   }
 
+  // ---- Showcase (playing state, wide screens) ---------------------------------
+  // A separate layer on top of the playing state: once the record is spinning, the turntable's own
+  // camera tips to look nearly straight down, and the turntable shrinks and slides to the bottom-left
+  // corner (a lens shift, see placeTableCamera). The demo frame in the page follows `onShowcase`.
+  // Eject and swap play it backwards first, then run their own timelines untouched.
+  const SH = K.SHOWCASE;
+  const showcaseK = { v: 0 };
+  let showcaseTween = null;
+  let exiting = false; // the showcase is playing backwards before an eject / swap starts
+  const platterWorld = new THREE.Vector3();
+  const tableLook = new THREE.Vector3();
+
+  function setShowcase(v) {
+    showcaseK.v = v;
+    applyCamera();
+    applyReflections();
+    onShowcase?.(v);
+  }
+  // Moves the showcase to 0 or 1; instant (and always with reduced motion) = no tween
+  function tweenShowcase(target, { instant = false, onComplete } = {}) {
+    showcaseTween?.kill();
+    showcaseTween = null;
+    if (instant || reduceMotion) {
+      setShowcase(target);
+      onComplete?.();
+      return;
+    }
+    showcaseTween = gsap.to(showcaseK, {
+      v: target,
+      duration: target ? SH.duration : SH.exitDuration,
+      ease: target ? SH.ease : SH.exitEase,
+      overwrite: true,
+      onUpdate: () => setShowcase(showcaseK.v),
+      onComplete,
+    });
+  }
+  const enterShowcase = () => {
+    if (!compact) tweenShowcase(1);
+  };
+  // If the showcase is on, play it backwards first and only then run `run` (an eject or a swap)
+  function afterShowcaseExit(run) {
+    if (showcaseK.v <= 0.001) {
+      tweenShowcase(0, { instant: true });
+      run();
+      return;
+    }
+    exiting = true;
+    clearCollapseTimers();
+    tweenShowcase(0, {
+      onComplete: () => {
+        exiting = false;
+        run();
+      },
+    });
+  }
   function setState(next, index) {
     state = next;
     onStateChange?.(next, index);
+    if (next === "playing") enterShowcase(); // the record has arrived and is spinning
   }
 
   // Sleeves can be hovered / picked in the stack state, and (on wide screens) while a record
   // is playing, where the other sleeves are the way to swap.
-  const canPickSleeves = () => state === "stack" || (state === "playing" && !compact);
+  const canPickSleeves = () => state === "stack" || (state === "playing" && !compact && !exiting);
 
   function applyHover() {
     sleeves.forEach((s, i) => {
@@ -232,7 +291,40 @@ export async function createShelfScene({ canvas, covers, onHover, onSelect, onSt
 
     camView.x = x;
     camView.y = y;
-    shiftCamera(tableCamera, 1);
+    placeTableCamera();
+  }
+
+  // The turntable camera. Normally the stack camera moved sideways to sit in front of the turntable
+  // (shiftCamera, amount 1). In the showcase it also orbits up to look nearly straight down at the
+  // platter, zooms out a little, and the lens shift slides the platter to the corner anchor.
+  function placeTableCamera() {
+    const s = showcaseK.v;
+    if (s <= 0) {
+      shiftCamera(tableCamera, 1);
+      return;
+    }
+    const dx = tablePos.x;
+    const elevation0 = THREE.MathUtils.degToRad(K.STACK_CAMERA.pitch);
+    // The turntable is already tipped towards the camera, so the camera only needs the rest
+    const elevation1 = THREE.MathUtils.degToRad(SH.pitch) - turntable.rotation.x;
+    const elevation = THREE.MathUtils.lerp(elevation0, elevation1, s);
+    tableLook.set(camTarget.x + dx, camTarget.y, camTarget.z).lerp(platterWorld, s);
+
+    tableCamera.fov = camera.fov;
+    tableCamera.aspect = camera.aspect;
+    tableCamera.zoom = camera.zoom * THREE.MathUtils.lerp(1, SH.scale, s);
+    tableCamera.position.set(0, Math.sin(elevation), Math.cos(elevation)).multiplyScalar(distance).add(tableLook);
+    tableCamera.lookAt(tableLook);
+
+    // Where the look-at point (the platter at the end) lands on screen
+    const radius = PLATTER_RADIUS * RIG_SCALE * scalePx * camera.zoom * SH.scale; // platter radius in px at the end
+    const fromX = camView.x + dx * scalePx * camera.zoom;
+    const fromY = camView.y;
+    const toX = SH.anchor.x * viewW - SH.cropAmount * radius;
+    const toY = SH.anchor.y * viewH + SH.cropAmount * radius;
+    const x = THREE.MathUtils.lerp(fromX, toX, s);
+    const y = THREE.MathUtils.lerp(fromY, toY, s);
+    tableCamera.setViewOffset(viewW, viewH, viewW / 2 - x, viewH / 2 - y, viewW, viewH);
   }
 
   // `cam` becomes the stack camera moved sideways by `amount` (0..1) of the way to the
@@ -302,6 +394,7 @@ export async function createShelfScene({ canvas, covers, onHover, onSelect, onSt
     turntable.localToWorld(hoverWorld.copy(RECORD_HOVER_POSITION));
     turntable.localToWorld(seatedWorld.copy(RECORD_SEATED_POSITION));
     rigQuat.copy(turntable.quaternion);
+    turntable.localToWorld(platterWorld.copy(PLATTER_CENTER));
 
     placeLayouts();
     applyCamera();
@@ -316,6 +409,7 @@ export async function createShelfScene({ canvas, covers, onHover, onSelect, onSt
   window.addEventListener("scroll", onScroll, { passive: true });
   const onCompactChange = () => {
     compact = compactQuery.matches;
+    if (compact) tweenShowcase(0, { instant: true }); // narrow screens have no showcase
     layout();
   };
   compactQuery.addEventListener("change", onCompactChange);
@@ -332,6 +426,7 @@ export async function createShelfScene({ canvas, covers, onHover, onSelect, onSt
     const played = current ? current.index : -1;
     const leave = current ? current.p.leave : 0;
     const collapsed = collapseK.v * leave; // 0 = the spread-out layout, 1 = collapsed
+    const stackLift = SH.stackOffsetY * showcaseK.v * leave; // the showcase moves the left stack up, clear of the turntable
     root.position.y = Math.sin(t * 0.7) * K.BOB * floatAmount;
 
     sleeves.forEach((s, i) => {
@@ -352,6 +447,7 @@ export async function createShelfScene({ canvas, covers, onHover, onSelect, onSt
             y = THREE.MathUtils.lerp(y, collapsedY, collapsed);
             z = collapsed * rank * CS.stepZ;
           }
+          y += stackLift;
         }
       }
 
@@ -373,7 +469,7 @@ export async function createShelfScene({ canvas, covers, onHover, onSelect, onSt
     const shut = half(n - 2, CS.stepY);
     const height = 2 * THREE.MathUtils.lerp(open, shut, collapseK.v);
     groupHit.scale.set(2 + 2 * CS.hitPadding, height, 2 + 2 * CS.hitPadding);
-    groupHit.position.set(0, THREE.MathUtils.lerp(0, CS.offsetY, collapseK.v), 0);
+    groupHit.position.set(0, THREE.MathUtils.lerp(0, CS.offsetY, collapseK.v) + stackLift, 0);
   }
 
   // ---- The sequence --------------------------------------------------------
@@ -391,6 +487,16 @@ export async function createShelfScene({ canvas, covers, onHover, onSelect, onSt
         m.depthWrite = draws;
       }
     });
+  }
+
+  // Near the stack the record's reflections are turned down (RECORD_LOOK) and in the showcase, seen
+  // from above, a little more (SHOWCASE.reflection), so it stays deep black
+  function applyReflections() {
+    if (!current) return;
+    const look = K.RECORD_LOOK;
+    const fade = THREE.MathUtils.smoothstep(current.p.arc, look.fadeStart, look.fadeEnd);
+    const base = THREE.MathUtils.lerp(look.nearStack, 1, Math.pow(fade, look.curve));
+    current.record.setReflections(base * THREE.MathUtils.lerp(1, SH.reflection, showcaseK.v));
   }
 
   // Turns the timeline's numbers (current.p) into positions
@@ -440,10 +546,7 @@ export async function createShelfScene({ canvas, covers, onHover, onSelect, onSt
       }
     }
 
-    // Near the stack the record's reflections are turned down (see RECORD_LOOK in tweaks.js)
-    const look = K.RECORD_LOOK;
-    const fade = THREE.MathUtils.smoothstep(p.arc, look.fadeStart, look.fadeEnd);
-    record.setReflections(THREE.MathUtils.lerp(look.nearStack, 1, Math.pow(fade, look.curve)));
+    applyReflections();
 
     turntable.setTonearm(p.needle);
     onPanel?.(index, p.panel);
@@ -471,6 +574,7 @@ export async function createShelfScene({ canvas, covers, onHover, onSelect, onSt
     clearCollapseTimers();
     wantExpanded = false;
     tweenCollapse(0, true);
+    tweenShowcase(0, { instant: true });
     turntable.setTonearm(0);
     tableShown = false;
     viewLock = false;
@@ -551,8 +655,14 @@ export async function createShelfScene({ canvas, covers, onHover, onSelect, onSt
     else tl.play(0);
   }
 
-  // Back to the stack: the same timeline, backwards
+  // Back to the stack. If the showcase is on it plays backwards first, then the timeline runs backwards.
   function eject() {
+    if (state !== "playing" || !current || exiting) return;
+    afterShowcaseExit(ejectNow);
+  }
+
+  // The same timeline, backwards
+  function ejectNow() {
     if (state !== "playing" || !current) return;
     const c = current;
     clearCollapseTimers();
@@ -567,6 +677,11 @@ export async function createShelfScene({ canvas, covers, onHover, onSelect, onSt
   // While playing: put the current record back (its timeline backwards), then play the new
   // one (a fresh timeline forwards). The camera stays in the playing layout throughout.
   function swap(i) {
+    if (state !== "playing" || !current || exiting || i === current.index || !sleeves[i]) return;
+    afterShowcaseExit(() => swapNow(i));
+  }
+
+  function swapNow(i) {
     if (state !== "playing" || !current || i === current.index || !sleeves[i]) return;
     const old = current;
     viewLock = true;
@@ -594,7 +709,8 @@ export async function createShelfScene({ canvas, covers, onHover, onSelect, onSt
   }
 
   function finishMotion() {
-    if (state !== "transitioning" || !current) return;
+    if (exiting) showcaseTween?.progress(1, false); // finishes the showcase exit, which starts the eject / swap...
+    if (state !== "transitioning" || !current) return; // ...and that is finished below
     const c = current;
     if (c.tl.reversed()) {
       c.tl.progress(0, false); // eject: done. swap: the new record's timeline starts...
@@ -608,6 +724,8 @@ export async function createShelfScene({ canvas, covers, onHover, onSelect, onSt
   // index -1 = the stack, otherwise that record is on the turntable.
   function jumpTo(index) {
     finishMotion();
+    exiting = false;
+    tweenShowcase(0, { instant: true });
     if (state === "playing") {
       if (current.index === index) return;
       const c = current;
@@ -621,6 +739,7 @@ export async function createShelfScene({ canvas, covers, onHover, onSelect, onSt
       setState("transitioning", index);
       beginPick(index).progress(1, false);
       tweenCollapse(1, true);
+      if (!compact) tweenShowcase(1, { instant: true }); // a deep link lands in the showcase end state
     }
   }
   // ---- Render loop (runs only while the canvas is on screen and the tab is visible) ----
@@ -784,6 +903,7 @@ export async function createShelfScene({ canvas, covers, onHover, onSelect, onSt
   document.addEventListener("pointerdown", onDocumentPointerDown, true);
   // ---- Dev helpers (dev builds only): window.__tl, window.__shelf and a scrub slider ----
   let devSlider = null;
+  let showSlider = null;
   if (import.meta.env.DEV) {
     devSlider = document.createElement("input");
     devSlider.type = "range";
@@ -805,6 +925,24 @@ export async function createShelfScene({ canvas, covers, onHover, onSelect, onSt
     });
     document.body.append(devSlider);
     window.__shelf = { pick, eject, swap, skip, expand, collapse, getState: () => state, collapseAmount: () => collapseK.v };
+    // Showcase: set(progress 0..1) jumps (and stops any tween), enter() / exit() tween it
+    window.__showcase = {
+      set: (v) => {
+        showcaseTween?.kill();
+        setShowcase(Math.min(1, Math.max(0, v)));
+        showSlider.value = showcaseK.v;
+      },
+      enter: () => enterShowcase(),
+      exit: () => tweenShowcase(0),
+      get: () => showcaseK.v,
+    };
+    showSlider = devSlider.cloneNode();
+    showSlider.title = "Scrub the showcase (dev only)";
+    showSlider.setAttribute("aria-label", "Scrub the showcase (dev only)");
+    showSlider.value = "0";
+    Object.assign(showSlider.style, { bottom: "2.6rem" });
+    showSlider.addEventListener("input", () => window.__showcase.set(Number(showSlider.value)));
+    document.body.append(showSlider);
   }
 
   sync();
@@ -863,9 +1001,12 @@ export async function createShelfScene({ canvas, covers, onHover, onSelect, onSt
       key.shadow.map?.dispose();
       renderer.dispose();
       devSlider?.remove();
+      showSlider?.remove();
+      showcaseTween?.kill();
       if (import.meta.env.DEV) {
         delete window.__tl;
         delete window.__shelf;
+        delete window.__showcase;
       }
     },
   };

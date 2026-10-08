@@ -63,6 +63,33 @@ export const COLLAPSED_STACK = {
   collapseEase: "power2.inOut",
   hitPadding: 0.35, // the invisible hover area is the whole group plus this margin, so moving between sleeves never collapses it
 };
+// SHOWCASE: once a record is spinning, the page shifts focus to a demo area. The turntable gets out of
+// the way: its camera tips to look nearly straight down on it, and it shrinks and slides to the
+// bottom-left corner, partly cropped by the screen edge, like a big record peeking in from the side.
+// A placeholder "browser window" frame grows in from the right (between the left stack and the info
+// panel, never overlapping the panel). Wide screens only; narrow screens keep the stacked layout.
+// On eject or swap the showcase plays backwards first, then the normal sequence runs.
+export const SHOWCASE = {
+  duration: 1.2, // s, entering
+  ease: "power3.inOut",
+  exitDuration: 0.6, // s, leaving (before an eject / swap starts)
+  exitEase: "power2.inOut",
+  pitch: 80, // apparent viewing angle of the turntable at the end (90 = straight down)
+  scale: 0.9, // turntable size relative to the normal playing layout
+  anchor: { x: 0.1, y: 0.9 }, // where the platter centre ends up, as fractions of the viewport (0,0 = top left)
+  cropAmount: 0.45, // pushes the platter centre this many platter radii further into the corner (left and down), so the edge crops it
+  reflection: 0.6, // multiplies the record's reflections at the end, so it stays deep black seen from above (1 = unchanged)
+  stackOffsetY: 0.9, // the remaining sleeves on the left move up by this much (world units) so they stay clear of the turntable
+  frame: {
+    aspect: 16 / 10, // width / height
+    widthFraction: 0.6, // of the viewport width (it shrinks to fit between the left stack and the info panel)
+    left: 0.24, // the frame never starts left of this fraction of the viewport width (clear of the left stack)
+    gap: 24, // px kept between the frame and the info panel
+    top: 48, // px, from the top of the scene area (the info panel's top); keeps it clear of the sticky "Back to cover" row on short screens
+    fromScale: 0.4, // size it grows from (it scales from its right edge)
+    slide: 0, // px it starts to the right of its final place (it already grows from its right edge; anything above 0 makes it cross into the info panel mid-way)
+  },
+};
 // Light and colour
 export const COVER_BRIGHTNESS = 1; // covers and edge labels are unlit; 1 = identical to the SVG
 export const COVER_TEXTURE_SIZE = 2048; // crispness vs GPU memory (4 covers x size x size x 4 bytes)

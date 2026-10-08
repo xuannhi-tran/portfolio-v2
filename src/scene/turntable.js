@@ -31,6 +31,7 @@ const SEAT_EPSILON = 0.002; // gap between the record and the rubber mat when se
 // ----------------------------------------------------------------------------
 
 export const TURNTABLE_WIDTH = PLINTH.width; // for laying the scene out
+export const PLATTER_RADIUS = PLATTER.radius;
 const plinthTop = FEET.height + PLINTH.height;
 const platterTop = plinthTop + PLATTER.height;
 const matTop = platterTop + MAT.height;
