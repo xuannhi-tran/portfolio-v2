@@ -1,7 +1,7 @@
 import { statSync } from "node:fs";
 import { resolve } from "node:path";
 import { pathToFileURL } from "node:url";
-import { renderCovers, renderPanels, renderTracks } from "./scripts/sleeves.js";
+import { renderCovers, renderPanels, renderTracks, screenshotUrl } from "./scripts/sleeves.js";
 
 const dataFile = resolve(import.meta.dirname, "src/projects.js");
 
@@ -28,6 +28,7 @@ function renderCard(p) {
           <p class="label">Side ${escapeHtml(p.side)} · ${escapeHtml(p.year)}</p>
           <h3>${escapeHtml(p.title)}</h3>
           <p>${escapeHtml(p.description)}</p>
+          <img class="shot card-shot" src="${screenshotUrl(p)}" alt="Screenshot of ${escapeHtml(p.title)}" loading="lazy" decoding="async">
           <p class="stack label">${escapeHtml(p.stack)}</p>
           ${renderCardTracks(p)}
           <div class="card-links">

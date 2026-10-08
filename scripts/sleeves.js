@@ -125,8 +125,23 @@ ${s.items.join("\n")}
     )
     .join("\n");
 }
+// Where a project's screenshot lives, and the label for the demo frame's title bar:
+// the live demo's hostname, otherwise the repo name.
+export const screenshotUrl = (p) => `/demos/${p.slug}.png`;
+export function demoHost(p) {
+  try {
+    if (p.demoUrl) return new URL(p.demoUrl).hostname;
+    if (p.repoUrl) return new URL(p.repoUrl).pathname.split("/").filter(Boolean).pop() ?? "";
+  } catch {
+    /* fall through */
+  }
+  return "";
+}
+
 // The info panel for every project (shown one at a time on the right while a record plays).
-// Real HTML written at build time; src/shelf.js only shows and hides it.
+// Real HTML written at build time; src/shelf.js only shows and hides it. The three notes are
+// the callouts that the showcase connects to the screenshot with thin lines. On narrow screens
+// there are no lines: the screenshot sits above the notes as a plain list.
 export function renderPanels(projects) {
   return projects
     .map((p, i) => {
@@ -137,29 +152,25 @@ export function renderPanels(projects) {
         p.repoUrl
           ? `<a class="button" href="${escapeHtml(p.repoUrl)}" target="_blank" rel="noopener noreferrer">Repo</a>`
           : "",
-        `<button type="button" class="button panel-back">Back to crate</button>`,
       ]
         .filter(Boolean)
         .join("\n            ");
-      const tracks = (p.tracks ?? [])
+      const notes = (p.tracks ?? [])
         .map(
-          (t, n) => `<li>
-              <span class="track-no label">${String(n + 1).padStart(2, "0")}</span>
-              <div>
-                <p class="track-name label">${escapeHtml(t.name)}</p>
-                <p class="track-text">${escapeHtml(t.text)}</p>
-              </div>
+          (t, n) => `<li class="callout-note" tabindex="0" data-n="${n}">
+              <p class="track-name label">${escapeHtml(t.name)}</p>
+              <p class="track-text">${escapeHtml(t.text)}</p>
             </li>`,
         )
         .join("\n            ");
-      return `      <section class="panel" data-index="${i}" data-slug="${escapeHtml(p.slug)}" aria-labelledby="panel-title-${escapeHtml(p.slug)}" hidden>
+      return `      <section class="panel" data-index="${i}" data-slug="${escapeHtml(p.slug)}" data-host="${escapeHtml(demoHost(p))}" data-hotspots="${escapeHtml(JSON.stringify(p.hotspots ?? []))}" aria-labelledby="panel-title-${escapeHtml(p.slug)}" hidden>
           <p class="label panel-side">Side ${escapeHtml(p.side)} · ${escapeHtml(p.year)}</p>
           <h3 class="panel-title" id="panel-title-${escapeHtml(p.slug)}" tabindex="-1">${escapeHtml(p.title)}</h3>
           <p class="panel-desc">${escapeHtml(p.description)}</p>
-          <h4 class="label panel-heading">Tracklist</h4>
-          <ol class="tracks-detail">
-            ${tracks}
-          </ol>
+          <img class="shot panel-shot" src="${screenshotUrl(p)}" alt="Screenshot of ${escapeHtml(p.title)}" loading="lazy" decoding="async">
+          <ul class="callouts" aria-label="Notes">
+            ${notes}
+          </ul>
           <p class="stack label">${escapeHtml(p.stack)}</p>
           <div class="panel-links">
             ${links}

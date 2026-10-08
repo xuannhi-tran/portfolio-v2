@@ -15,7 +15,7 @@
 // Routes: #/projects (the stack) and #/projects/<slug> (that record playing). Picking, swapping and
 // ejecting update the hash; opening a URL, back and forward jump straight to the state, no animation.
 
-import { COMPACT, PANEL, SHOWCASE } from "./scene/tweaks.js";
+import { CALLOUTS, COMPACT, PANEL, SHOWCASE } from "./scene/tweaks.js";
 
 const shelf = document.querySelector(".shelf");
 const crate = document.querySelector(".crate");
@@ -27,6 +27,10 @@ const compactQuery = matchMedia(COMPACT.query);
 const reducedMotion = () => matchMedia("(prefers-reduced-motion: reduce)").matches;
 const info = document.getElementById("info");
 const demoFrame = document.getElementById("demo-frame");
+const demoBody = demoFrame?.querySelector("[data-demo-body]");
+const demoShot = demoFrame?.querySelector("[data-demo-shot]");
+const demoHost = demoFrame?.querySelector("[data-demo-host]");
+const lineLayer = document.getElementById("callout-lines");
 const panels = [...document.querySelectorAll(".panel")].sort((a, b) => a.dataset.index - b.dataset.index);
 const slugs = tracks.map((t) => t.dataset.slug);
 const hashFor = (i) => (i >= 0 ? `#/projects/${slugs[i]}` : "#/projects");
@@ -156,6 +160,8 @@ function placeFrame() {
 // Called by the scene as the showcase moves (0 = the normal playing layout, 1 = the showcase)
 function onShowcase(progress) {
   if (!demoFrame) return;
+  // The lines draw once the frame has finished growing, and fade out as soon as it starts to leave
+  if (progress < 0.999) hideCallouts();
   const F = SHOWCASE.frame;
   const reduce = reducedMotion();
   const visible = progress > 0.001 && !compactQuery.matches;
@@ -174,6 +180,7 @@ function onShowcase(progress) {
     demoFrame.style.transform = `translateX(${(1 - progress) * F.slide}px) scale(${F.fromScale + (1 - F.fromScale) * progress})`;
     demoFrame.style.opacity = String(Math.min(1, progress * 1.6));
   }
+  if (progress >= 0.999) showCallouts();
 }
 
 // Called by the scene while a record's panel fades in or out (amount 0..1)
@@ -196,6 +203,248 @@ function onPanel(index, amount) {
     } else {
       panel.style.opacity = String(amount);
     }
+  });
+}
+
+// ---- The screenshot in the demo frame ---------------------------------------
+// public/demos/<slug>.png for the active project, loaded only when that record is picked. Two
+// stacked images let it crossfade into the next one; if the file is missing the frame keeps its
+// "Demo placeholder" text (no broken-image icon).
+const demoImgs = [];
+let demoFront = null;
+let demoToken = 0;
+const dots = [];
+
+function setUpDemo() {
+  if (!demoFrame || !demoBody || !demoShot) return;
+  const root = document.documentElement.style;
+  root.setProperty("--image-fade", `${CALLOUTS.imageFade}s`);
+  root.setProperty("--dot-size", `${CALLOUTS.dotSize}px`);
+  root.setProperty("--dot-hot-scale", String(CALLOUTS.dotHotScale));
+  root.setProperty("--line-opacity", String(CALLOUTS.lineOpacity));
+  root.setProperty("--line-hot-opacity", String(CALLOUTS.lineHotOpacity));
+
+  for (let i = 0; i < 2; i++) {
+    const img = document.createElement("img");
+    img.className = "demo-img";
+    img.alt = "";
+    img.decoding = "async";
+    demoShot.append(img);
+    demoImgs.push(img);
+  }
+  for (let i = 0; i < 3; i++) {
+    const dot = document.createElement("span");
+    dot.className = "hotspot";
+    dot.setAttribute("aria-hidden", "true");
+    dot.hidden = true;
+    demoBody.append(dot);
+    dots.push(dot);
+  }
+
+  // Dev only: click the screenshot to print a hotspot to paste into src/projects.js
+  if (import.meta.env.DEV) {
+    demoBody.addEventListener("click", (e) => {
+      const r = demoBody.getBoundingClientRect();
+      const x = Math.round(((e.clientX - r.left) / r.width) * 100) / 100;
+      const y = Math.round(((e.clientY - r.top) / r.height) * 100) / 100;
+      console.log(`hotspot { x: ${x}, y: ${y} }`);
+    });
+  }
+
+  // A screenshot that is missing in the page (the narrow-screen panel, the list view) is just hidden
+  document.addEventListener("error", (e) => hideIfBrokenShot(e.target), true);
+  document.querySelectorAll("img.shot").forEach((img) => {
+    if (img.complete && img.naturalWidth === 0 && img.getAttribute("src")) hideIfBrokenShot(img);
+  });
+}
+
+function hideIfBrokenShot(el) {
+  if (el instanceof HTMLImageElement && el.classList.contains("shot")) el.hidden = true;
+}
+
+function loadDemo(index) {
+  const panel = panels[index];
+  if (!panel || !demoBody) return;
+  const token = ++demoToken;
+  if (demoHost) demoHost.textContent = panel.dataset.host || "";
+  setHotspots(panel);
+
+  const url = `/demos/${panel.dataset.slug}.png`;
+  const probe = new Image();
+  probe.decoding = "async";
+  probe.onload = () => token === demoToken && showDemoImage(url, `Screenshot of ${titles[index]}`);
+  probe.onerror = () => token === demoToken && showDemoPlaceholder();
+  probe.src = url;
+}
+
+function showDemoImage(url, alt) {
+  const incoming = demoImgs.find((img) => img !== demoFront) ?? demoImgs[0];
+  incoming.alt = alt;
+  incoming.src = url;
+  // Crossfade if the frame is on screen; if it is hidden (a swap leaves the showcase first) just switch
+  const instant = !demoFrame || demoFrame.hidden;
+  if (instant) demoShot.classList.add("no-fade");
+  demoFront?.classList.remove("is-front");
+  incoming.classList.add("is-front");
+  demoFront = incoming;
+  if (instant) {
+    void demoShot.offsetWidth; // apply the switch before the fade comes back
+    demoShot.classList.remove("no-fade");
+  }
+  demoBody.dataset.state = "image";
+}
+
+function showDemoPlaceholder() {
+  demoFront?.classList.remove("is-front");
+  demoFront = null;
+  if (demoBody) demoBody.dataset.state = "placeholder";
+}
+
+function setHotspots(panel) {
+  let spots = [];
+  try {
+    spots = JSON.parse(panel.dataset.hotspots || "[]");
+  } catch {
+    /* no hotspots */
+  }
+  dots.forEach((dot, i) => {
+    const s = spots[i];
+    dot.hidden = !s;
+    if (s) {
+      dot.style.left = `${s.x * 100}%`;
+      dot.style.top = `${s.y * 100}%`;
+    }
+  });
+}
+
+// ---- Callouts: lines from the dots to the notes -----------------------------
+// One SVG over the page (fixed, no pointer events). The endpoints come from getBoundingClientRect
+// of each dot and note, redone on resize, scroll, a size change of the frame or the panel, and
+// when the project changes. The lines draw with stroke-dashoffset (pathLength 1, so a resize
+// never breaks them) and each note fades in as its line arrives.
+const SVG_NS = "http://www.w3.org/2000/svg";
+let calloutsOn = false;
+let calloutsEpoch = 0;
+let notes = [];
+let paths = [];
+let calloutsAbort = null;
+let calloutsObserver = null;
+
+function showCallouts() {
+  if (calloutsOn || compactQuery.matches || picked < 0 || !lineLayer || !demoFrame || demoFrame.hidden) return;
+  const panel = panels[picked];
+  if (!panel || panel.hidden) return;
+  cleanCallouts(); // anything still fading out from before
+  const epoch = ++calloutsEpoch;
+  calloutsOn = true;
+  notes = [...panel.querySelectorAll(".callout-note")];
+  shelf.dataset.callouts = "on";
+  demoBody.classList.add("callouts-on");
+
+  paths = notes.map(() => {
+    const path = document.createElementNS(SVG_NS, "path");
+    path.setAttribute("pathLength", "1");
+    path.style.strokeDasharray = "1";
+    lineLayer.append(path);
+    return path;
+  });
+  layoutCallouts();
+
+  // Highlight a note, its dot and its line together (hover or keyboard focus on either end)
+  calloutsAbort = new AbortController();
+  const { signal } = calloutsAbort;
+  const hot = (i, on) => {
+    notes[i]?.classList.toggle("is-hot", on);
+    dots[i]?.classList.toggle("is-hot", on);
+    paths[i]?.classList.toggle("is-hot", on);
+  };
+  notes.forEach((note, i) => {
+    for (const type of ["pointerenter", "focus"]) note.addEventListener(type, () => hot(i, true), { signal });
+    for (const type of ["pointerleave", "blur"]) note.addEventListener(type, () => hot(i, false), { signal });
+    dots[i].addEventListener("pointerenter", () => hot(i, true), { signal });
+    dots[i].addEventListener("pointerleave", () => hot(i, false), { signal });
+  });
+
+  // Anything that changes where a dot or a note is
+  calloutsObserver = new ResizeObserver(() => epoch === calloutsEpoch && layoutCallouts());
+  calloutsObserver.observe(demoFrame);
+  calloutsObserver.observe(panel);
+
+  if (reducedMotion()) return; // lines and dots appear at once, no drawing
+  const C = CALLOUTS;
+  notes.forEach((note, i) => {
+    const delay = i * C.stagger * 1000;
+    paths[i].animate([{ strokeDashoffset: 1 }, { strokeDashoffset: 0 }], {
+      duration: C.drawDuration * 1000,
+      delay,
+      easing: "ease-out",
+      fill: "both",
+    });
+    note.animate([{ opacity: 0 }, { opacity: 1 }], {
+      duration: C.noteFade * 1000,
+      delay: delay + C.drawDuration * 1000 * 0.7, // as its line arrives
+      fill: "both",
+    });
+    dots[i].style.setProperty("--delay", `${delay}ms`);
+    dots[i].classList.add("pulse"); // pulses once as it appears
+  });
+}
+
+function hideCallouts({ instant = false } = {}) {
+  if (!calloutsOn) return;
+  calloutsOn = false;
+  const epoch = ++calloutsEpoch;
+  calloutsObserver?.disconnect();
+  if (instant || reducedMotion()) {
+    cleanCallouts();
+    return;
+  }
+  // Fade the lines, dots and notes out (the frame only starts to shrink slowly)
+  const ms = CALLOUTS.fadeOutDuration * 1000;
+  lineLayer.animate([{ opacity: 1 }, { opacity: 0 }], { duration: ms, fill: "forwards" });
+  notes.forEach((note) => note.animate([{ opacity: 1 }, { opacity: 0 }], { duration: ms, fill: "forwards" }));
+  demoBody.classList.remove("callouts-on");
+  setTimeout(() => epoch === calloutsEpoch && cleanCallouts(), ms + 30);
+}
+
+function cleanCallouts() {
+  calloutsAbort?.abort();
+  calloutsAbort = null;
+  calloutsObserver?.disconnect();
+  lineLayer?.getAnimations().forEach((a) => a.cancel());
+  lineLayer?.replaceChildren();
+  notes.forEach((note) => {
+    note.getAnimations().forEach((a) => a.cancel());
+    note.classList.remove("is-hot");
+  });
+  dots.forEach((dot) => dot.classList.remove("pulse", "is-hot"));
+  demoBody?.classList.remove("callouts-on");
+  shelf.dataset.callouts = "off";
+  notes = [];
+  paths = [];
+}
+
+let layoutQueued = false;
+function layoutCallouts() {
+  if (!calloutsOn || layoutQueued) return;
+  layoutQueued = true;
+  requestAnimationFrame(() => {
+    layoutQueued = false;
+    if (!calloutsOn) return;
+    const C = CALLOUTS;
+    notes.forEach((note, i) => {
+      const dot = dots[i];
+      if (!dot || dot.hidden || !paths[i]) return;
+      const a = dot.getBoundingClientRect();
+      const b = note.getBoundingClientRect();
+      const x0 = a.left + a.width / 2;
+      const y0 = a.top + a.height / 2;
+      const x3 = b.left - C.noteGap; // ends just before the note's left edge, level with its title
+      const y3 = b.top + Math.min(b.height / 2, 16);
+      const x1 = x3 - C.elbow;
+      // one diagonal, then a short horizontal run into the note (a straight line if the dot is too far right)
+      paths[i].setAttribute("d", x1 > x0 ? `M${x0} ${y0} L${x1} ${y3} L${x3} ${y3}` : `M${x0} ${y0} L${x3} ${y3}`);
+    });
   });
 }
 
@@ -263,6 +512,8 @@ function onStateChange(next, index) {
       const target = hashFor(lastAction === "eject" ? -1 : index);
       if (location.hash !== target) history.pushState(null, "", target);
     }
+    // Only the record that is about to play gets its screenshot loaded (not on an eject)
+    if (!(previous === "playing" && index === picked)) loadDemo(index);
     if (previous === "stack") {
       picked = index;
       // Bring the scene into view: the stack's column, or the top of it on narrow screens
@@ -301,16 +552,21 @@ export function initShelf() {
 
   tracks.forEach((track, i) => wireItem(track, i));
   ejectButton?.addEventListener("click", requestEject);
-  panels.forEach((panel) => panel.querySelector(".panel-back")?.addEventListener("click", requestEject));
   compactQuery.addEventListener("change", () => {
     render();
     placePanel();
-    if (compactQuery.matches && demoFrame) demoFrame.hidden = true;
+    if (compactQuery.matches) {
+      hideCallouts({ instant: true });
+      if (demoFrame) demoFrame.hidden = true;
+    }
   });
   window.addEventListener("resize", () => {
     placePanel();
     placeFrame();
+    layoutCallouts();
   });
+  window.addEventListener("scroll", layoutCallouts, { passive: true }); // the lines are fixed, the page is not
+  setUpDemo();
 
   document.addEventListener("keydown", (e) => {
     if (e.key !== "Escape" || !scene) return;
@@ -366,6 +622,10 @@ export async function enterShelf() {
 
 export function leaveShelf() {
   entered = false;
+  hideCallouts({ instant: true });
+  // Nothing of a playing record may be left behind for the next visit
+  panels.forEach((panel) => (panel.hidden = true));
+  if (demoFrame) demoFrame.hidden = true;
   wantedSlug = null;
   scene?.dispose();
   scene = null;

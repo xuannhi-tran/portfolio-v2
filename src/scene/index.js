@@ -657,7 +657,11 @@ export async function createShelfScene({ canvas, covers, onHover, onSelect, onSt
 
   // Back to the stack. If the showcase is on it plays backwards first, then the timeline runs backwards.
   function eject() {
-    if (state !== "playing" || !current || exiting) return;
+    if (exiting) {
+      showcaseTween?.progress(1, false); // asked again (Esc twice): finish leaving the showcase now
+      return;
+    }
+    if (state !== "playing" || !current) return;
     afterShowcaseExit(ejectNow);
   }
 

@@ -99,15 +99,21 @@
           <!-- project-panels -->
         </div>
 
-        <!-- The showcase: an empty placeholder frame for the demo (a later stage fills [data-demo-body]) -->
+        <!-- The showcase: a window with the active project's screenshot (public/demos/<slug>.png,
+             set up by src/shelf.js, with this placeholder as the fallback) -->
         <section class="demo-frame" id="demo-frame" data-demo aria-label="Project demo" hidden>
           <div class="demo-bar" aria-hidden="true">
             <span class="demo-dots"><i></i><i></i><i></i></span>
+            <span class="label demo-host" data-demo-host></span>
           </div>
-          <div class="demo-body" data-demo-body>
-            <p class="label">Demo placeholder</p>
+          <div class="demo-body" data-demo-body data-state="placeholder">
+            <p class="label demo-placeholder">Demo placeholder</p>
+            <div class="demo-shot" data-demo-shot></div>
           </div>
         </section>
+
+        <!-- Thin lines from the screenshot's hotspots to the notes in the info panel (wide screens) -->
+        <svg class="callout-lines" id="callout-lines" aria-hidden="true" focusable="false"></svg>
         <p class="label shelf-status" id="shelf-status" aria-live="polite"></p>
         <a class="list-link label" href="#/list">View as list</a>
       </section>

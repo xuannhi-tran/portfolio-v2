@@ -518,6 +518,7 @@ h2 {
    scene's timeline, so there is no CSS transition for it (except with reduced motion, below). */
 .info {
   position: absolute;
+  z-index: 2; /* above the callout lines */
   display: flex;
   align-items: flex-start;
   pointer-events: none;
@@ -563,28 +564,52 @@ h2 {
   color: #cfcfcf;
 }
 
-.panel-heading {
-  margin-bottom: 0.6rem;
-  padding-top: 0.9rem;
-  border-top: 1px solid var(--line);
+/* The screenshot only shows in the panel on narrow screens (the demo frame shows it on wide ones) */
+.shot {
+  display: block;
+  width: 100%;
+  height: auto;
+  aspect-ratio: 16 / 10;
+  object-fit: cover;
+  object-position: top;
+  border: 1px solid var(--line);
+  border-radius: 0.5rem;
 }
 
-.tracks-detail {
+.shot[hidden] {
+  display: none; /* the file is missing: no broken-image icon */
+}
+
+.panel-shot {
+  display: none;
+  margin-bottom: 1.2rem;
+}
+
+/* The three notes. On wide screens they are the callouts: a line from the screenshot ends at each
+   one's left edge. */
+.callouts {
   display: grid;
-  gap: 0.7rem;
+  gap: 0.35rem;
   margin: 0 0 1.1rem;
   padding: 0;
   list-style: none;
 }
 
-.tracks-detail li {
-  display: grid;
-  grid-template-columns: 2rem 1fr;
-  gap: 0.25rem 0.5rem;
+.callout-note {
+  padding: 0.35rem 0 0.35rem 0.8rem;
+  border-left: 1px solid var(--line);
+  transition: border-color 0.2s;
 }
 
-.track-no {
-  padding-top: 0.15rem;
+.callout-note.is-hot,
+.callout-note:hover,
+.callout-note:focus-visible {
+  border-left-color: var(--text);
+}
+
+.callout-note:focus-visible {
+  outline: 1px solid var(--muted);
+  outline-offset: 2px;
 }
 
 .track-name {
@@ -632,7 +657,7 @@ h2 {
   outline-offset: 4px;
 }
 
-/* Showcase: an empty placeholder "browser window" for the demo. src/shelf.js places it between the
+/* Showcase: a "browser window" holding the project's screenshot. src/shelf.js places it between the
    left stack and the info panel, and its transform / opacity follow the scene's showcase progress. */
 .demo-frame {
   position: absolute;
@@ -654,6 +679,7 @@ h2 {
   flex: none;
   display: flex;
   align-items: center;
+  gap: 1rem;
   height: 2rem;
   padding: 0 0.9rem;
   border-bottom: 1px solid var(--line);
@@ -672,18 +698,132 @@ h2 {
   background: var(--line);
 }
 
+.demo-host {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  text-transform: none;
+  letter-spacing: 0.04em;
+}
+
 .demo-body {
+  position: relative;
   flex: 1;
+  min-height: 0;
   display: grid;
   place-items: center;
 }
 
-@media (max-width: 48rem) {
-  .demo-frame {
-    display: none; /* narrow screens keep the stacked layout, no showcase */
+/* The screenshot: two stacked images so that one can crossfade into the other */
+.demo-shot {
+  position: absolute;
+  inset: 0;
+}
+
+.demo-img {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: top;
+  opacity: 0;
+  transition: opacity var(--image-fade, 0.3s) ease;
+}
+
+.demo-img.is-front {
+  opacity: 1;
+}
+
+.demo-shot.no-fade .demo-img {
+  transition: none;
+}
+
+/* The fallback, until (or unless) there is an image for the project */
+.demo-body[data-state="image"] .demo-placeholder {
+  visibility: hidden;
+}
+
+/* The dots on the screenshot; each is joined to a note by a line (the SVG overlay below) */
+.hotspot {
+  position: absolute;
+  width: var(--dot-size, 10px);
+  height: var(--dot-size, 10px);
+  margin: calc(var(--dot-size, 10px) / -2) 0 0 calc(var(--dot-size, 10px) / -2);
+  border-radius: 50%;
+  background: #fff;
+  box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.55);
+  opacity: 0;
+  transform: scale(0.4);
+  transition: opacity 0.25s, transform 0.25s;
+}
+
+.demo-body.callouts-on .hotspot {
+  opacity: 1;
+  transform: scale(1);
+}
+
+.demo-body.callouts-on .hotspot.is-hot {
+  transform: scale(var(--dot-hot-scale, 1.7));
+}
+
+.hotspot.pulse::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  border: 1px solid #fff;
+  animation: hotspot-pulse 0.9s ease-out var(--delay, 0ms) 1 both;
+}
+
+@keyframes hotspot-pulse {
+  from {
+    transform: scale(1);
+    opacity: 0.9;
+  }
+  to {
+    transform: scale(3.2);
+    opacity: 0;
   }
 }
-/* The list view shows the same tracklist */
+
+/* The lines: one SVG over the page, above the canvas and the frame, below the info panel */
+.callout-lines {
+  position: fixed;
+  inset: 0;
+  z-index: 1;
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+  pointer-events: none;
+}
+
+.callout-lines path {
+  fill: none;
+  stroke: #fff;
+  stroke-opacity: var(--line-opacity, 0.5);
+  stroke-width: 1;
+  vector-effect: non-scaling-stroke;
+  transition: stroke-opacity 0.2s;
+}
+
+.callout-lines path.is-hot {
+  stroke-opacity: var(--line-hot-opacity, 0.95);
+}
+
+/* Wide screens: the notes only appear when their lines do (src/shelf.js fades them in) */
+@media (min-width: 48.01rem) {
+  .shelf:not([data-callouts="on"]) .callout-note {
+    visibility: hidden;
+  }
+}
+
+/* The list view shows the same notes, with the screenshot above them */
+.card-shot {
+  margin: 0.25rem 0;
+}
+
 .card-tracks {
   margin: 0.25rem 0 0.25rem;
   padding: 0;
@@ -699,7 +839,13 @@ h2 {
   display: block;
 }
 
+/* Narrow screens: no showcase and no lines. The screenshot sits above a plain list of notes. */
 @media (max-width: 48rem) {
+  .demo-frame,
+  .callout-lines {
+    display: none;
+  }
+
   .info {
     position: static;
     display: block;
@@ -709,12 +855,17 @@ h2 {
   .shelf .panel {
     transform: translateY(var(--slide, 0));
   }
-}
 
+  .panel-shot {
+    display: block;
+  }
+}
 @media (prefers-reduced-motion: reduce) {
   /* No slide: just a quick change of opacity */
   .shelf .panel,
-  .demo-frame {
+  .demo-frame,
+  .demo-img,
+  .hotspot {
     transition: opacity 0.2s ease !important;
   }
 

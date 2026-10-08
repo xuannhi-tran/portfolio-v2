@@ -52,8 +52,8 @@ export const LEAVE_OFFSET = 1.8; // the played sleeve slides this far to the LEF
 // touch screens, and collapse again when it leaves. Wide screens only. Distances are world units
 // (a sleeve is 2 wide, 0.24 thick); times are seconds.
 export const COLLAPSED_STACK = {
-  stepY: 0.3, // vertical distance between collapsed sleeves; smaller = tighter (do not go below ~0.25, the slab thickness is 0.24)
-  stepZ: 0.1, // each lower sleeve sticks out this far towards the camera, so a sliver of its top shows
+  stepY: 0.26, // vertical distance between collapsed sleeves. The slab is 0.24 thick, so 0.26 leaves only a hairline of each lower cover's blank margin above its strip; larger values start to show the cover title
+  stepZ: 0, // each lower sleeve sticks out this far towards the camera. Keep 0: anything above it shows the cover art / title cut off above the strip
   offsetY: 0, // shift the collapsed group up (+) or down (-)
   hoverInDelay: 0.15, // the pointer must stay over the group this long before it expands
   hoverOutDelay: 0.25, // ...and stay off it this long before it collapses again
@@ -89,6 +89,22 @@ export const SHOWCASE = {
     fromScale: 0.4, // size it grows from (it scales from its right edge)
     slide: 0, // px it starts to the right of its final place (it already grows from its right edge; anything above 0 makes it cross into the info panel mid-way)
   },
+};
+// CALLOUTS (wide screens, in the showcase): three dots on the screenshot, each joined by a thin line to
+// a note in the info panel. The lines draw after the demo frame has finished growing and fade out
+// when the showcase leaves (eject / swap). The hotspot positions are in src/projects.js.
+export const CALLOUTS = {
+  drawDuration: 0.6, // s, each line draws from its dot to its note
+  stagger: 0.12, // s between one line and the next
+  noteFade: 0.3, // s, each note fades in as its line arrives
+  fadeOutDuration: 0.2, // s, lines, dots and notes fade out when the showcase starts leaving
+  elbow: 28, // px, the short horizontal run into a note (the line is one diagonal and this horizontal)
+  noteGap: 6, // px between the end of a line and the note's left edge
+  lineOpacity: 0.5, // white, as a fraction
+  lineHotOpacity: 0.95, // while its note or dot is hovered / focused
+  dotSize: 10, // px
+  dotHotScale: 1.7, // how much a dot grows while hovered / focused
+  imageFade: 0.3, // s, crossfade between screenshots
 };
 // Light and colour
 export const COVER_BRIGHTNESS = 1; // covers and edge labels are unlit; 1 = identical to the SVG
