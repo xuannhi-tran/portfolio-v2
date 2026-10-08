@@ -22,7 +22,7 @@
       <div class="nav-inner">
         <a class="wordmark" href="#cover">Nhi Tran</a>
         <ul>
-          <li><a href="#projects">Projects</a></li>
+          <li><a href="#/projects" data-nav="projects">Projects</a></li>
           <li><a href="#about">About</a></li>
           <li><a href="#contact">Contact</a></li>
         </ul>
@@ -30,53 +30,107 @@
     </nav>
 
     <main>
-      <section class="cover" id="cover" aria-labelledby="name">
-        <p class="label">Portfolio · 2026</p>
+      <section class="cover" id="cover" data-view="home" aria-labelledby="name">
+        <div class="cover-frame">
+          <p class="label">Portfolio · 2026</p>
 
-        <h1 id="name">Vo Xuan Nhi Tran</h1>
-        <p class="role">Software Engineering student, University of Sydney</p>
+          <h1 id="name">Vo Xuan Nhi Tran</h1>
 
-        <p class="intro">
-          Hi, I'm Nhi. I'm in my third year of Software Engineering at USYD. I
-          like building small things end to end and learning how they work as I
-          go. I have a strong passion with music so that will be the general
-          theme for this portfolio.
-        </p>
+          <div class="cover-meta label">
+            <span class="role">Software Engineering student</span>
+            <span class="rule" aria-hidden="true"></span>
+            <span class="school">USYD</span>
+            <span class="year">2026</span>
+          </div>
 
+          <p class="intro">
+            Hi, I'm Nhi. I'm in my third year of Software Engineering at USYD. I
+            like building small things end to end and learning how they work as
+            I go. I'm really into music, so that's the theme of this portfolio.
+          </p>
+
+          <ul class="links label">
+            <li>
+              <a
+                href="https://github.com/xuannhi-tran"
+                target="_blank"
+                rel="noopener"
+                >GitHub</a
+              >
+            </li>
+            <li>
+              <a
+                href="https://www.linkedin.com/in/xuannhi-tran"
+                target="_blank"
+                rel="noopener"
+                >LinkedIn</a
+              >
+            </li>
+            <li>
+              <a href="/assets/CV_Resume.pdf" download="Vo_Xuan_Nhi_Tran_CV.pdf"
+                >CV</a
+              >
+            </li>
+          </ul>
+
+          <a class="button" href="#/projects">See my projects</a>
+        </div>
+      </section>
+
+      <section class="shelf" id="shelf" data-view="shelf" aria-labelledby="shelf-title">
+        <a class="button back" href="#/">← Back to cover</a>
+        <h2 id="shelf-title">Projects</h2>
+        <p class="label">Pick a record</p>
+
+        <div class="shelf-layout">
+          <div class="tracklist">
+            <!-- project-tracks -->
+          </div>
+          <div class="crate">
+            <canvas class="scene" id="scene" aria-hidden="true"></canvas>
+            <!-- project-covers -->
+          </div>
+        </div>
+
+        <p class="label shelf-status" id="shelf-status" aria-live="polite"></p>
+        <a class="list-link label" href="#/list">View as list</a>
+      </section>
+
+      <section class="projects" id="projects" data-view="list" aria-labelledby="projects-title">
+        <h2 id="projects-title">Projects</h2>
+
+        <ul class="cards">
+          <!-- project-cards -->
+        </ul>
+      </section>
+
+      <section class="page-section" id="about" data-view="home" aria-labelledby="about-title">
+        <h2 id="about-title">About</h2>
+        <p>Placeholder: first paragraph about me.</p>
+        <p>Placeholder: second paragraph about me.</p>
+        <p>Placeholder: third paragraph about me.</p>
+      </section>
+
+      <section
+        class="page-section"
+        id="contact" data-view="home"
+        aria-labelledby="contact-title"
+      >
+        <h2 id="contact-title">Contact</h2>
         <ul class="links label">
+          <li><a href="#">Email</a></li>
           <li>
-            <a
-              href="https://github.com/xuannhi-tran"
-              target="_blank"
-              rel="noopener"
-              >GitHub</a
-            >
-          </li>
-          <li>
-            <a
-              href="https://www.linkedin.com/in/xuannhi-tran"
-              target="_blank"
-              rel="noopener"
+            <a href="https://www.linkedin.com/in/xuannhi-tran" rel="noopener"
               >LinkedIn</a
             >
           </li>
           <li>
-            <a href="/assets/CV_Resume.pdf" download="Vo_Xuan_Nhi_Tran_CV.pdf"
-              >CV</a
-            >
+            <a href="https://github.com/xuannhi-tran" rel="noopener">GitHub</a>
           </li>
         </ul>
-
-        <a class="button" href="#projects">See my projects</a>
-      </section>
-
-      <section class="projects" id="projects" aria-labelledby="projects-title">
-        <h2 id="projects-title">Projects</h2>
-
-        <ul class="cards">
-        <!-- project-cards -->
-      </ul>
+        <a class="button" href="/assets/CV_Resume.pdf" download>Download CV</a>
       </section>
     </main>
+    <script type="module" src="/src/main.js"></script>
   </body>
 </html>

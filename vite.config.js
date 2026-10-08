@@ -1,6 +1,7 @@
 import { statSync } from "node:fs";
 import { resolve } from "node:path";
 import { pathToFileURL } from "node:url";
+import { renderCovers, renderTracks } from "./scripts/sleeves.js";
 
 const dataFile = resolve(import.meta.dirname, "src/projects.js");
 
@@ -35,7 +36,10 @@ function projectCards() {
       // The mtime query busts Node's import cache so edits show up on reload.
       const url = `${pathToFileURL(dataFile).href}?t=${statSync(dataFile).mtimeMs}`;
       const { projects } = await import(url);
-      return html.replace("<!-- project-cards -->", projects.map(renderCard).join("\n"));
+      return html
+        .replace("<!-- project-cards -->", projects.map(renderCard).join("\n"))
+        .replace("<!-- project-tracks -->", renderTracks(projects))
+        .replace("<!-- project-covers -->", renderCovers(projects));
     },
     handleHotUpdate({ file, server }) {
       if (resolve(file) === dataFile) {

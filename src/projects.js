@@ -1,8 +1,11 @@
 // All project data lives here. Edit this file to change the cards.
 // Leave demoUrl as "" and no "Live demo" link is shown.
+// cover.color / cover.motif style the album sleeve on the shelf
+// (motif: "document" | "bars" | "compass" | "wave").
 export const projects = [
   {
     title: "RAG Document Assistant",
+    cover: { color: "#3b4a5a", motif: "document" },
     side: "A",
     year: 2026,
     description:
@@ -13,6 +16,7 @@ export const projects = [
   },
   {
     title: "Expense Tracker",
+    cover: { color: "#4a5a3f", motif: "bars" },
     side: "A",
     year: 2026,
     description:
@@ -23,6 +27,7 @@ export const projects = [
   },
   {
     title: "JobCompass",
+    cover: { color: "#6b4a3a", motif: "compass" },
     side: "A",
     year: 2026,
     description:
@@ -33,6 +38,7 @@ export const projects = [
   },
   {
     title: "Discord Music Bot",
+    cover: { color: "#5a3f55", motif: "wave" },
     side: "B",
     year: 2025,
     description:

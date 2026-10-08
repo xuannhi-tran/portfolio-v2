@@ -1,0 +1,24 @@
+/* Styles for the turntable component (turntable.html). Not imported anywhere yet. */
+.turntable {
+  display: block;
+  width: 100%;
+  height: auto;
+}
+
+.record {
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: spin 20s linear infinite;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .record {
+    animation: none;
+  }
+}

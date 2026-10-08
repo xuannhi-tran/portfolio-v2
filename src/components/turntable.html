@@ -1,0 +1,115 @@
+<!-- Turntable component: flat top-down SVG with a spinning record.
+     Styles are in turntable.css. Not used on any page yet; paste or include it where needed. -->
+<svg
+  class="turntable"
+  viewBox="0 0 400 400"
+  role="img"
+  aria-label="Illustration of a turntable with a vinyl record"
+>
+  <defs>
+    <radialGradient
+      id="sheen"
+      cx="190"
+      cy="210"
+      r="148"
+      gradientUnits="userSpaceOnUse"
+    >
+      <stop offset="0.25" stop-color="#fff" stop-opacity="0" />
+      <stop offset="1" stop-color="#fff" stop-opacity="0.16" />
+    </radialGradient>
+  </defs>
+
+  <!-- plinth and platter -->
+  <rect
+    x="10"
+    y="10"
+    width="380"
+    height="380"
+    rx="14"
+    fill="#090909"
+    stroke="#3a3a3a"
+  />
+  <circle cx="190" cy="210" r="160" fill="#141414" stroke="#3a3a3a" />
+  <circle
+    cx="190"
+    cy="210"
+    r="154"
+    fill="none"
+    stroke="#2a2a2a"
+    stroke-dasharray="1 5"
+  />
+
+  <!-- record (spins) -->
+  <g class="record">
+    <circle
+      cx="190"
+      cy="210"
+      r="150"
+      fill="#0d0d0d"
+      stroke="#3a3a3a"
+    />
+    <g fill="none" stroke="#2c2c2c" stroke-width="1">
+      <circle cx="190" cy="210" r="142" />
+      <circle cx="190" cy="210" r="136" />
+      <circle cx="190" cy="210" r="130" />
+      <circle cx="190" cy="210" r="124" />
+      <circle
+        cx="190"
+        cy="210"
+        r="118"
+        stroke="#1f1f1f"
+        stroke-width="3"
+      />
+      <circle cx="190" cy="210" r="112" />
+      <circle cx="190" cy="210" r="106" />
+      <circle cx="190" cy="210" r="100" />
+      <circle cx="190" cy="210" r="94" />
+      <circle
+        cx="190"
+        cy="210"
+        r="88"
+        stroke="#1f1f1f"
+        stroke-width="3"
+      />
+      <circle cx="190" cy="210" r="82" />
+      <circle cx="190" cy="210" r="76" />
+      <circle cx="190" cy="210" r="70" />
+      <circle cx="190" cy="210" r="64" />
+    </g>
+    <path
+      d="M190 210 L259.5 79.3 A148 148 0 0 1 320.7 140.5 Z"
+      fill="url(#sheen)"
+    />
+    <path
+      d="M190 210 L120.5 340.7 A148 148 0 0 1 59.3 279.5 Z"
+      fill="url(#sheen)"
+    />
+    <!-- label -->
+    <circle cx="190" cy="210" r="46" fill="#e9e5da" />
+    <circle cx="190" cy="210" r="38" fill="none" stroke="#b9b4a6" />
+    <circle cx="190" cy="210" r="4" fill="#0d0d0d" />
+  </g>
+
+  <!-- tonearm, parked off the record -->
+  <rect x="352" y="26" width="16" height="30" rx="3" fill="#8a8a8a" />
+  <circle cx="360" cy="72" r="22" fill="#1a1a1a" stroke="#8a8a8a" />
+  <circle cx="360" cy="72" r="9" fill="#bdbdbd" />
+  <line
+    x1="360"
+    y1="72"
+    x2="360"
+    y2="292"
+    stroke="#c8c8c8"
+    stroke-width="6"
+    stroke-linecap="round"
+  />
+  <rect
+    x="346"
+    y="288"
+    width="24"
+    height="38"
+    rx="3"
+    fill="#c8c8c8"
+    transform="rotate(8 360 292)"
+  />
+</svg>
