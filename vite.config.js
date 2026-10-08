@@ -1,9 +1,11 @@
 import { statSync } from "node:fs";
 import { resolve } from "node:path";
 import { pathToFileURL } from "node:url";
+import { renderContactLinks, renderCoverLinks, renderCvButton } from "./scripts/site-links.js";
 import { renderCovers, renderPanels, renderTracks, screenshotUrl } from "./scripts/sleeves.js";
 
 const dataFile = resolve(import.meta.dirname, "src/projects.js");
+const siteFile = resolve(import.meta.dirname, "src/site.js");
 
 const escapeHtml = (s) =>
   String(s)
@@ -46,14 +48,18 @@ function projectCards() {
       // The mtime query busts Node's import cache so edits show up on reload.
       const url = `${pathToFileURL(dataFile).href}?t=${statSync(dataFile).mtimeMs}`;
       const { projects } = await import(url);
+      const { site } = await import(`${pathToFileURL(siteFile).href}?t=${statSync(siteFile).mtimeMs}`);
       return html
+        .replace("<!-- site-links-cover -->", renderCoverLinks(site))
+        .replace("<!-- site-links-contact -->", renderContactLinks(site))
+        .replace("<!-- site-cv-button -->", renderCvButton(site))
         .replace("<!-- project-cards -->", projects.map(renderCard).join("\n"))
         .replace("<!-- project-tracks -->", renderTracks(projects))
         .replace("<!-- project-covers -->", renderCovers(projects))
         .replace("<!-- project-panels -->", renderPanels(projects));
     },
     handleHotUpdate({ file, server }) {
-      if (resolve(file) === dataFile) {
+      if ([dataFile, siteFile].includes(resolve(file))) {
         server.ws.send({ type: "full-reload" });
         return [];
       }

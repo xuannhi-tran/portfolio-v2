@@ -301,8 +301,11 @@ function updateLiveButtons() {
   liveOpen.hidden = idle;
   liveExpand.hidden = idle;
   liveBack.hidden = idle;
-  liveOpen.href = liveUrl || "#";
-  if (liveSlowLink) liveSlowLink.href = liveUrl || "#";
+  for (const link of [liveOpen, liveSlowLink]) {
+    if (!link) continue;
+    if (liveUrl) link.href = liveUrl;
+    else link.removeAttribute("href"); // never a dead "#" link
+  }
   liveExpand.textContent = liveExpanded ? "Collapse" : "Expand";
   liveExpand.setAttribute("aria-expanded", String(liveExpanded));
 }

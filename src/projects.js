@@ -40,9 +40,9 @@ export const projects = [
       "Struggling to make your money last until the end of the month? Haha, I've been there. Log what you spend, see where it all goes, and try my expense tracker.",
     stack: "React · Django REST · PostgreSQL",
     repoUrl: "https://github.com/xuannhi-tran/expense-frontend",
-    demoUrl: "https://expense-frontend-tau-eight.vercel.app/",
-    liveEnabled: false, // its backend database has expired; turn this on when it is back
-    liveNote: "",
+    demoUrl: "https://expense-frontend-tau-eight.vercel.app/?demo=1",
+    liveEnabled: true,
+    liveNote: "Demo mode with sample data, nothing is saved.",
   },
   {
     title: "JobCompass",

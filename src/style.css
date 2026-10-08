@@ -161,8 +161,7 @@ a:focus-visible {
   position: fixed;
   inset: 0 0 auto 0;
   z-index: 10;
-  background: rgba(0, 0, 0, 0.85);
-  backdrop-filter: blur(6px);
+  background: #000; /* solid, so nothing from the page shows through the nav */
   border-bottom: 1px solid var(--line);
 }
 
