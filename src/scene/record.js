@@ -212,6 +212,24 @@ export function createRecord(project) {
     })
     .catch(() => {});
 
+  // Reflections can be turned down (0..1) without touching the painted groove sheen. The
+  // scene hands over its environment map so that the intensity is controllable per record.
+  let envIntensity = 1;
+  group.useEnvironment = (envMap, intensity = 1) => {
+    envIntensity = intensity;
+    for (const m of [vinylTop, vinylEdge]) {
+      m.envMap = envMap;
+      m.needsUpdate = true;
+    }
+    group.setReflections(1);
+  };
+  group.setReflections = (amount) => {
+    vinylTop.envMapIntensity = envIntensity * amount;
+    vinylEdge.envMapIntensity = envIntensity * amount;
+    vinylTop.clearcoat = VINYL.clearcoat * amount;
+    vinylTop.specularIntensity = amount;
+  };
+
   group.setProject = (next) => {
     current = next;
     drawLabel(labelCanvas, next);

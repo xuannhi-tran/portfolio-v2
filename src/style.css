@@ -376,12 +376,134 @@ h2 {
 }
 
 /* Right: the WebGL canvas (see src/scene/) */
-.scene {
+/* The canvas is a full-viewport layer behind the page. The crate is only a placeholder that
+   reserves the stack's column in the layout (the camera's lens shift puts the stack there). */
+.shelf {
+  position: relative;
+  isolation: isolate; /* keeps the canvas (z-index -1) behind the text but above the page */
+  pointer-events: none; /* clicks fall through to the canvas, which only reacts to the sleeves... */
+}
+
+.shelf :is(h2, p, a, button, .tracklist) {
+  pointer-events: auto; /* ...except on the text and controls, which stay clickable */
+}
+
+.crate {
+  position: relative;
+  aspect-ratio: 9 / 16; /* tall enough for the exploded stack to fill the width */
+  scroll-margin-top: 4rem;
+}
+
+.shelf-top {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+/* While a record is picked or playing the page scrolls to the scene, so the top row
+   ("Back to cover" / "All records") stays visible under the nav. */
+.shelf:not([data-state="stack"]) .shelf-top {
+  position: sticky;
+  top: 4.25rem;
+  z-index: 2;
+}
+
+/* While a record is picked or playing, the heading, label and list go away. They are only
+   hidden (not removed) so the layout, and with it the 3D scene's position, stays put. */
+.shelf > h2,
+.shelf-label,
+.tracklist {
+  transition: opacity 0.4s ease, visibility 0s;
+}
+
+.shelf:not([data-state="stack"]) > h2,
+.shelf:not([data-state="stack"]) .shelf-label,
+.shelf:not([data-state="stack"]) .tracklist {
+  opacity: 0;
+  visibility: hidden;
+  transition: opacity 0.4s ease, visibility 0s 0.4s;
+}
+
+/* Keyboard / screen reader buttons for the 3D sleeves while a record is playing */
+.play-buttons {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}
+
+/* Narrow screens: the other records as a row of cover thumbnails under the turntable */
+.thumbs {
+  display: none;
+}
+
+.thumb svg {
   display: block;
   width: 100%;
-  aspect-ratio: 9 / 16; /* tall enough for the exploded stack to fill the width */
+  height: auto;
+  color: #ece6d6;
+}
+
+.thumb .cover-label {
+  font-family: var(--mono);
+  font-size: 7px;
+  letter-spacing: 0.14em;
+  fill: currentColor;
+  opacity: 0.75;
+}
+
+.thumb .cover-title {
+  font-family: var(--serif);
+  font-size: 24px;
+  fill: currentColor;
+}
+
+@media (max-width: 48rem) {
+  .shelf[data-state="playing"] .thumbs {
+    position: absolute;
+    top: 58%; /* of the crate's height: just below the turntable */
+    left: 0;
+    right: 0;
+    display: flex;
+    gap: 0.75rem;
+  }
+
+  .thumb {
+    flex: 1 1 0;
+    min-width: 0;
+    margin: 0;
+    padding: 0;
+    border: 1px solid var(--line);
+    background: none;
+    cursor: pointer;
+    transition: transform 0.2s ease;
+  }
+
+  .thumb:hover,
+  .thumb:focus-visible {
+    transform: translateY(-3px);
+  }
+
+  .thumb:focus-visible {
+    outline: 2px solid var(--text);
+    outline-offset: 4px;
+  }
+}
+
+.scene {
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  display: block;
+  width: 100%;
+  height: 100%;
+  pointer-events: auto;
   touch-action: pan-y; /* keep vertical page scrolling working over the canvas */
 }
+
 .shelf-status {
   min-height: 1.5em;
   margin: 2rem 0 0.5rem;

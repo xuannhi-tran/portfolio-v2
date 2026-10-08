@@ -77,10 +77,13 @@
         </div>
       </section>
 
-      <section class="shelf" id="shelf" data-view="shelf" aria-labelledby="shelf-title">
-        <a class="button back" href="#/">← Back to cover</a>
+      <section class="shelf" id="shelf" data-view="shelf" data-state="stack" aria-labelledby="shelf-title">
+        <div class="shelf-top">
+          <a class="button back" href="#/">← Back to cover</a>
+          <button type="button" class="button back" id="eject" hidden>← All records</button>
+        </div>
         <h2 id="shelf-title">Projects</h2>
-        <p class="label">Pick a record</p>
+        <p class="label shelf-label">Pick a record</p>
 
         <div class="shelf-layout">
           <div class="tracklist">

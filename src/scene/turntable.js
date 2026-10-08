@@ -27,8 +27,10 @@ const ARM = {
 const HIGHLIGHT = 0.4; // emissive strength of the hover highlight on the button and arm
 // Record positions relative to the turntable group (for stage 3)
 const HOVER_HEIGHT = 0.55; // how far above the seated position the record floats
+const SEAT_EPSILON = 0.002; // gap between the record and the rubber mat when seated: avoids z-fighting / clipping
 // ----------------------------------------------------------------------------
 
+export const TURNTABLE_WIDTH = PLINTH.width; // for laying the scene out
 const plinthTop = FEET.height + PLINTH.height;
 const platterTop = plinthTop + PLATTER.height;
 const matTop = platterTop + MAT.height;
@@ -36,7 +38,7 @@ const armY = matTop + RECORD_THICKNESS + ARM.needleDrop;
 
 export const PLATTER_CENTER = new THREE.Vector3(PLATTER.x, matTop, PLATTER.z);
 // Record centre when it sits on the spindle, and when it floats just above it
-export const RECORD_SEATED_POSITION = new THREE.Vector3(PLATTER.x, matTop + RECORD_THICKNESS / 2, PLATTER.z);
+export const RECORD_SEATED_POSITION = new THREE.Vector3(PLATTER.x, matTop + RECORD_THICKNESS / 2 + SEAT_EPSILON, PLATTER.z);
 export const RECORD_HOVER_POSITION = RECORD_SEATED_POSITION.clone().add(new THREE.Vector3(0, HOVER_HEIGHT, 0));
 
 // Where the needle tip is, relative to the arm's pivot, with the arm pointing straight ahead

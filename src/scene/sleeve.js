@@ -7,8 +7,8 @@ export const SLEEVE_THICKNESS = 0.24;
 // edge a small label; both are unlit (MeshBasicMaterial) so they show the exact
 // colours of the texture and look the same on every sleeve. The other faces are
 // a darker shade of the cover colour and are lit. No shadows are cast or received.
-// The record and turntable will get their own files next to this one.
-export function createSleeve({ index, texture, edgeTexture, color, brightness = 1 }) {
+// The slab is opaque, so a record placed inside it is hidden until it slides out.
+export function createSleeve({ index, texture, edgeTexture, color, brightness = 1, dimStrength = 0.5 }) {
   const dark = new THREE.Color(color).multiplyScalar(0.5);
   const side = () =>
     new THREE.MeshStandardMaterial({ color: dark, emissive: dark, emissiveIntensity: 0, roughness: 0.85 });
@@ -24,18 +24,35 @@ export function createSleeve({ index, texture, edgeTexture, color, brightness = 
   const mesh = new THREE.Mesh(geometry, materials);
   mesh.userData.index = index;
 
-  function setGlow(amount) {
-    // Hover / selected: a gentle brightening
-    cover.color.setScalar(brightness * (1 + amount * 0.18));
-    edge.color.setScalar(brightness * (1 + amount * 0.18));
-    for (const m of sides) m.emissiveIntensity = amount * 0.3;
+  // glow: 0..1 brightens (hover); dim: 0..1 darkens (other sleeves while one is picked)
+  function setLook(glow, dim = 0) {
+    const level = brightness * (1 + glow * 0.18) * (1 - dim * dimStrength);
+    cover.color.setScalar(level);
+    edge.color.setScalar(level);
+    for (const m of sides) {
+      m.color.copy(dark).multiplyScalar(1 - dim * dimStrength);
+      m.emissiveIntensity = glow * 0.3;
+    }
   }
-  setGlow(0);
+  setLook(0, 0);
+
+  // 0..1: fades the whole sleeve out (the played sleeve leaves the stack)
+  let opacity = 1;
+  function setOpacity(next) {
+    if (next === opacity) return;
+    opacity = next;
+    for (const m of materials) {
+      m.transparent = next < 1;
+      m.opacity = next;
+      m.depthWrite = next >= 1;
+    }
+    mesh.visible = next > 0.01;
+  }
 
   return {
     mesh,
-    // 0..1: how much the sleeve is brightened (hover / selected)
-    setGlow,
+    setLook,
+    setOpacity,
     dispose() {
       geometry.dispose();
       materials.forEach((m) => m.dispose());
