@@ -85,26 +85,33 @@ export const SHOWCASE = {
     widthFraction: 0.6, // of the viewport width (it shrinks to fit between the left stack and the info panel)
     left: 0.24, // the frame never starts left of this fraction of the viewport width (clear of the left stack)
     gap: 24, // px kept between the frame and the info panel
+    maxHeight: 0.8, // of the viewport height: the frame is never taller (its width shrinks instead)
+    bottomGap: 24, // px kept between the frame's bottom and the "Now playing" line
+    rowGap: 12, // px kept between the frame's top and the "Back to cover / All records" row
+    minFit: 0.75, // if aligning with the panel would shrink the frame below this fraction of its natural size, it is centred instead
     top: 48, // px, from the top of the scene area (the info panel's top); keeps it clear of the sticky "Back to cover" row on short screens
     fromScale: 0.4, // size it grows from (it scales from its right edge)
     slide: 0, // px it starts to the right of its final place (it already grows from its right edge; anything above 0 makes it cross into the info panel mid-way)
   },
 };
-// CALLOUTS (wide screens, in the showcase): three dots on the screenshot, each joined by a thin line to
-// a note in the info panel. The lines draw after the demo frame has finished growing and fade out
-// when the showcase leaves (eject / swap). The hotspot positions are in src/projects.js.
-export const CALLOUTS = {
-  drawDuration: 0.6, // s, each line draws from its dot to its note
-  stagger: 0.12, // s between one line and the next
-  noteFade: 0.3, // s, each note fades in as its line arrives
-  fadeOutDuration: 0.2, // s, lines, dots and notes fade out when the showcase starts leaving
-  elbow: 28, // px, the short horizontal run into a note (the line is one diagonal and this horizontal)
-  noteGap: 6, // px between the end of a line and the note's left edge
-  lineOpacity: 0.5, // white, as a fraction
-  lineHotOpacity: 0.95, // while its note or dot is hovered / focused
-  dotSize: 10, // px
-  dotHotScale: 1.7, // how much a dot grows while hovered / focused
-  imageFade: 0.3, // s, crossfade between screenshots
+// DEMO_IMAGE: the screenshot in the demo frame. The frame's body takes the screenshot's own shape (so nothing
+// is cropped), clamped between minAspect and maxAspect (width / height); SHOWCASE.frame.aspect is the fallback.
+export const DEMO_IMAGE = {
+  minAspect: 4 / 3,
+  maxAspect: 2,
+  fade: 0.3, // s, crossfade between screenshots
+};
+// LIVE_DEMO: the "Try it live" button in the demo frame mounts the project's real site in an iframe
+// (only on a click, only for projects with liveEnabled in src/projects.js, wide screens only).
+export const LIVE_DEMO = {
+  virtualWidth: 1280, // px: the page is rendered this wide and scaled down to fit the frame (height follows the frame's shape)
+  slowAfter: 8, // s: if it has not loaded by then, show the "free hosting can be slow" message
+  fadeIn: 0.3, // s: the iframe fades in once it has loaded
+  expandWidth: 0.92, // EXPAND: the frame grows to this fraction of the viewport width...
+  expandHeight: 0.86, // ...and this fraction of its height, centred
+  expandDuration: 0.45, // s
+  expandEase: "power3.inOut",
+  backdropOpacity: 0.78, // the dim layer behind the expanded frame
 };
 // Light and colour
 export const COVER_BRIGHTNESS = 1; // covers and edge labels are unlit; 1 = identical to the SVG

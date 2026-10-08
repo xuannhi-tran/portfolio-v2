@@ -15,7 +15,7 @@
 // Routes: #/projects (the stack) and #/projects/<slug> (that record playing). Picking, swapping and
 // ejecting update the hash; opening a URL, back and forward jump straight to the state, no animation.
 
-import { CALLOUTS, COMPACT, PANEL, SHOWCASE } from "./scene/tweaks.js";
+import { COMPACT, DEMO_IMAGE, LIVE_DEMO, PANEL, SHOWCASE } from "./scene/tweaks.js";
 
 const shelf = document.querySelector(".shelf");
 const crate = document.querySelector(".crate");
@@ -30,7 +30,7 @@ const demoFrame = document.getElementById("demo-frame");
 const demoBody = demoFrame?.querySelector("[data-demo-body]");
 const demoShot = demoFrame?.querySelector("[data-demo-shot]");
 const demoHost = demoFrame?.querySelector("[data-demo-host]");
-const lineLayer = document.getElementById("callout-lines");
+const demoBar = demoFrame?.querySelector(".demo-bar");
 const panels = [...document.querySelectorAll(".panel")].sort((a, b) => a.dataset.index - b.dataset.index);
 const slugs = tracks.map((t) => t.dataset.slug);
 const hashFor = (i) => (i >= 0 ? `#/projects/${slugs[i]}` : "#/projects");
@@ -139,29 +139,62 @@ function placePanel() {
 const panelWidth = () => Math.min(PANEL.maxWidth, document.documentElement.clientWidth * PANEL.widthFraction);
 
 // ---- The showcase demo frame -------------------------------------------------
-// A placeholder window between the left stack and the info panel (never overlapping the panel).
+// A window between the left stack and the info panel (never overlapping the panel), holding the
+// screenshot. Its body takes the screenshot's shape (frameAspect, clamped), so nothing is cropped; the
+// width stays as wide as the slot allows and only shrinks if the height would not fit the viewport.
 // It is laid out at its final size; the scene's showcase progress only drives its transform
 // (it grows from its right edge) and opacity.
+let frameAspect = SHOWCASE.frame.aspect;
 function placeFrame() {
-  if (!demoFrame || compactQuery.matches) return;
+  if (!demoFrame || compactQuery.matches || liveExpanded) return;
   const F = SHOWCASE.frame;
   const viewport = document.documentElement.clientWidth;
   const left = viewport * F.left;
   const right = viewport - panelWidth() - PANEL.margin - F.gap; // stays clear of the info panel
-  const width = Math.max(0, Math.min(viewport * F.widthFraction, right - left));
+  const slot = Math.max(0, Math.min(viewport * F.widthFraction, right - left));
+  const chrome = (demoBar?.offsetHeight || 32) + 2; // title bar + the frame's border
+  const maxHeight = window.innerHeight * F.maxHeight;
   const shelfRect = shelf.getBoundingClientRect();
   const crateRect = crate.getBoundingClientRect();
+
+  // Top edge level with the info panel's first line (measured now, so it follows resizes). Never above the
+  // "Back to cover / All records" row. The bottom stays F.bottomGap clear of the "Now playing" line.
+  const panelTop = (panels[picked] && !panels[picked].hidden ? panels[picked].querySelector(".panel-side") : null)?.getBoundingClientRect().top
+    ?? info.getBoundingClientRect().top + 4;
+  const rowBottom = document.querySelector(".shelf-top")?.getBoundingClientRect().bottom ?? 0;
+  const statusTop = status?.getBoundingClientRect().top ?? Infinity;
+  const alignedTop = Math.max(panelTop, rowBottom + F.rowGap);
+  const room = Math.min(maxHeight, statusTop - F.bottomGap - alignedTop);
+
+  let width = slot;
+  let height = width / frameAspect + chrome;
+  let topViewport = alignedTop;
+  if (room >= (slot / frameAspect + chrome) * F.minFit || room >= height) {
+    // Aligned with the panel; shrink the width rather than overflow
+    if (height > room) {
+      height = room;
+      width = (height - chrome) * frameAspect;
+    }
+  } else {
+    // Too short for that: the old centred position
+    if (height > maxHeight) {
+      height = maxHeight;
+      width = (height - chrome) * frameAspect;
+    }
+    const reference = Math.min(slot / F.aspect + chrome, maxHeight);
+    topViewport = crateRect.top + F.top + Math.max(0, (reference - height) / 2);
+  }
+  const top = topViewport - shelfRect.top;
   demoFrame.style.left = `${left + (right - left - width) / 2 - shelfRect.left}px`;
-  demoFrame.style.top = `${crateRect.top - shelfRect.top + F.top}px`;
+  demoFrame.style.top = `${top}px`;
   demoFrame.style.width = `${width}px`;
-  demoFrame.style.height = `${width / F.aspect}px`;
+  demoFrame.style.height = `${height}px`;
 }
 
 // Called by the scene as the showcase moves (0 = the normal playing layout, 1 = the showcase)
 function onShowcase(progress) {
   if (!demoFrame) return;
-  // The lines draw once the frame has finished growing, and fade out as soon as it starts to leave
-  if (progress < 0.999) hideCallouts();
+  if (progress < 0.999) endLive(); // the live demo is taken down completely before the frame shrinks
   const F = SHOWCASE.frame;
   const reduce = reducedMotion();
   const visible = progress > 0.001 && !compactQuery.matches;
@@ -180,7 +213,6 @@ function onShowcase(progress) {
     demoFrame.style.transform = `translateX(${(1 - progress) * F.slide}px) scale(${F.fromScale + (1 - F.fromScale) * progress})`;
     demoFrame.style.opacity = String(Math.min(1, progress * 1.6));
   }
-  if (progress >= 0.999) showCallouts();
 }
 
 // Called by the scene while a record's panel fades in or out (amount 0..1)
@@ -206,6 +238,268 @@ function onPanel(index, amount) {
   });
 }
 
+// ---- The live demo -----------------------------------------------------------
+// "Try it live" (only for projects with liveEnabled) mounts the project's site in an iframe on top of
+// the screenshot, after a click and never before. The page is laid out at LIVE_DEMO.virtualWidth and
+// scaled to fit the frame, so it stays crisp when the frame resizes and never reloads. EXPAND resizes
+// the same frame element in place (the iframe is never moved or re-created, or it would reload).
+// The iframe is removed completely whenever the demo ends (back to the screenshot, eject, swap, a new
+// project, leaving the shelf, the showcase leaving).
+const IFRAME_SANDBOX = "allow-scripts allow-same-origin allow-forms allow-popups allow-popups-to-escape-sandbox";
+let liveMode = "off"; // "off" | "loading" | "on"
+let liveExpanded = false;
+let liveUrl = ""; // the active project's live demo, or "" if it has none (or it is switched off)
+let liveIframe = null;
+let liveTimer = 0;
+let liveObserver = null;
+let expandTween = null;
+let backdrop = null;
+let liveStart;
+let liveOpen;
+let liveExpand;
+let liveBack;
+let liveLayer;
+let liveStage;
+let liveLoading;
+let liveSlow;
+let liveSlowLink;
+let demoNote;
+const htmlElement = document.documentElement;
+const gsapReady = () => import("gsap").then((m) => m.default);
+
+function setUpLive() {
+  if (!demoFrame) return;
+  liveStart = demoFrame.querySelector("[data-live-start]");
+  liveOpen = demoFrame.querySelector("[data-live-open]");
+  liveExpand = demoFrame.querySelector("[data-live-expand]");
+  liveBack = demoFrame.querySelector("[data-live-back]");
+  liveLayer = demoFrame.querySelector("[data-demo-live]");
+  liveStage = demoFrame.querySelector("[data-demo-stage]");
+  liveLoading = demoFrame.querySelector("[data-demo-loading]");
+  liveSlow = demoFrame.querySelector("[data-demo-slow]");
+  liveSlowLink = demoFrame.querySelector("[data-live-open-slow]");
+  demoNote = document.getElementById("demo-note");
+  document.documentElement.style.setProperty("--live-fade", `${LIVE_DEMO.fadeIn}s`);
+
+  backdrop = document.createElement("div");
+  backdrop.className = "demo-backdrop";
+  backdrop.hidden = true;
+  backdrop.addEventListener("click", () => collapseLive());
+  shelf.append(backdrop);
+
+  liveStart.addEventListener("click", startLive);
+  liveBack.addEventListener("click", () => endLive({ returnFocus: true }));
+  liveExpand.addEventListener("click", () => (liveExpanded ? collapseLive() : expandLive()));
+  updateLiveButtons();
+}
+
+// Which buttons show: "Try it live" when idle (and the project has a live demo); the other three while live
+function updateLiveButtons() {
+  if (!liveStart) return;
+  const idle = liveMode === "off";
+  liveStart.hidden = !(idle && liveUrl);
+  liveOpen.hidden = idle;
+  liveExpand.hidden = idle;
+  liveBack.hidden = idle;
+  liveOpen.href = liveUrl || "#";
+  if (liveSlowLink) liveSlowLink.href = liveUrl || "#";
+  liveExpand.textContent = liveExpanded ? "Collapse" : "Expand";
+  liveExpand.setAttribute("aria-expanded", String(liveExpanded));
+}
+
+function startLive() {
+  if (liveMode !== "off" || !liveUrl || !demoFrame || demoFrame.hidden || compactQuery.matches) return;
+  liveMode = "loading";
+  shelf.dataset.live = "on"; // the 3D canvas ignores the pointer meanwhile
+  htmlElement.classList.add("demo-live"); // the page behind does not scroll (a wheel over the demo cannot chain into it)
+
+  const iframe = document.createElement("iframe");
+  iframe.className = "demo-iframe";
+  iframe.title = `Live demo of ${titles[picked] ?? "the project"}`;
+  iframe.setAttribute("sandbox", IFRAME_SANDBOX);
+  iframe.referrerPolicy = "no-referrer-when-downgrade";
+  iframe.addEventListener("load", () => {
+    if (iframe !== liveIframe) return;
+    liveMode = "on";
+    clearTimeout(liveTimer);
+    liveSlow.hidden = true;
+    liveLoading.classList.add("is-done");
+    iframe.classList.add("is-loaded");
+    setTimeout(() => iframe === liveIframe && (liveLoading.hidden = true), 350);
+  });
+  liveIframe = iframe;
+  iframe.src = liveUrl;
+  liveStage.append(iframe);
+
+  liveLayer.hidden = false;
+  liveLoading.hidden = false;
+  liveLoading.classList.remove("is-done");
+  liveSlow.hidden = true;
+  fitLive();
+  liveObserver = new ResizeObserver(fitLive);
+  liveObserver.observe(demoBody);
+  // Blocked or refused frames cannot be detected reliably, so after a while show a hint (and the
+  // "Open in new tab" link in the title bar is there the whole time)
+  liveTimer = setTimeout(() => {
+    if (liveMode === "loading") liveSlow.hidden = false;
+  }, LIVE_DEMO.slowAfter * 1000);
+
+  updateLiveButtons();
+  placeNote();
+  liveBack.focus({ preventScroll: true }); // the start button just went away
+}
+
+// Lay the page out at the virtual width and scale it to fit the frame body (the height follows its shape)
+function fitLive() {
+  if (!liveIframe) return;
+  const w = demoBody.clientWidth;
+  const h = demoBody.clientHeight;
+  if (!w || !h) return;
+  const scale = w / LIVE_DEMO.virtualWidth;
+  liveIframe.style.width = `${LIVE_DEMO.virtualWidth}px`;
+  liveIframe.style.height = `${h / scale}px`;
+  liveIframe.style.transform = `scale(${scale})`;
+}
+
+// Takes the demo down completely. returnFocus: back to the screenshot by the visitor, so focus goes to "Try it live".
+function endLive({ returnFocus = false } = {}) {
+  if (liveMode === "off") return;
+  clearTimeout(liveTimer);
+  liveObserver?.disconnect();
+  liveObserver = null;
+  if (liveExpanded) collapseLive({ instant: true });
+  if (liveIframe) {
+    liveIframe.src = "about:blank";
+    liveIframe.remove();
+    liveIframe = null;
+  }
+  liveStage.replaceChildren();
+  liveMode = "off";
+  liveLayer.hidden = true;
+  liveSlow.hidden = true;
+  delete shelf.dataset.live;
+  htmlElement.classList.remove("demo-live");
+  if (demoNote) demoNote.hidden = true;
+  updateLiveButtons();
+  if (returnFocus) liveStart.focus({ preventScroll: true });
+}
+
+// The optional liveNote caption, under the frame
+function placeNote() {
+  if (!demoNote) return;
+  const text = panels[picked]?.dataset.liveNote ?? "";
+  demoNote.hidden = !(text && liveMode !== "off" && !liveExpanded);
+  if (demoNote.hidden) return;
+  demoNote.textContent = text;
+  const f = demoFrame.getBoundingClientRect();
+  const s = shelf.getBoundingClientRect();
+  demoNote.style.left = `${f.left - s.left}px`;
+  demoNote.style.top = `${f.bottom - s.top + 10}px`;
+}
+
+function expandedBox() {
+  const vw = document.documentElement.clientWidth;
+  const vh = window.innerHeight;
+  const width = vw * LIVE_DEMO.expandWidth;
+  const height = vh * LIVE_DEMO.expandHeight;
+  return { left: (vw - width) / 2, top: (vh - height) / 2, width, height };
+}
+
+function applyExpandedBox() {
+  const b = expandedBox();
+  Object.assign(demoFrame.style, {
+    left: `${b.left}px`,
+    top: `${b.top}px`,
+    width: `${b.width}px`,
+    height: `${b.height}px`,
+  });
+}
+
+// Grows the frame in place. FLIP: the frame jumps to its final size, then a GSAP transform eases it
+// from where it was. The same element keeps its iframe, so nothing reloads.
+async function expandLive() {
+  if (liveMode === "off" || liveExpanded) return;
+  const reduce = reducedMotion();
+  const gsap = reduce ? null : await gsapReady();
+  if (liveMode === "off" || liveExpanded) return;
+  liveExpanded = true;
+  const first = demoFrame.getBoundingClientRect();
+  expandTween?.kill();
+  demoFrame.classList.add("is-expanded");
+  applyExpandedBox();
+  backdrop.hidden = false;
+  updateLiveButtons();
+  placeNote();
+  if (!gsap) {
+    demoFrame.style.transform = "none";
+    backdrop.style.opacity = String(LIVE_DEMO.backdropOpacity);
+    return;
+  }
+  const last = demoFrame.getBoundingClientRect();
+  gsap.set(demoFrame, { transformOrigin: "0 0" });
+  expandTween = gsap.fromTo(
+    demoFrame,
+    { x: first.left - last.left, y: first.top - last.top, scaleX: first.width / last.width, scaleY: first.height / last.height },
+    {
+      x: 0,
+      y: 0,
+      scaleX: 1,
+      scaleY: 1,
+      duration: LIVE_DEMO.expandDuration,
+      ease: LIVE_DEMO.expandEase,
+      onComplete: () => gsap.set(demoFrame, { clearProps: "transform,transformOrigin" }),
+    },
+  );
+  gsap.to(backdrop, { opacity: LIVE_DEMO.backdropOpacity, duration: LIVE_DEMO.expandDuration, ease: "power2.out" });
+}
+
+async function collapseLive({ instant = false } = {}) {
+  if (!liveExpanded) return;
+  const reduce = reducedMotion();
+  const first = demoFrame.getBoundingClientRect();
+  liveExpanded = false;
+  expandTween?.kill();
+  const restore = () => {
+    demoFrame.classList.remove("is-expanded");
+    demoFrame.style.transform = "none";
+    placeFrame(); // back to the normal left / top / width / height
+  };
+  updateLiveButtons();
+  if (instant || reduce) {
+    restore();
+    backdrop.hidden = true;
+    backdrop.style.opacity = "0";
+    placeNote();
+    return;
+  }
+  const gsap = await gsapReady();
+  restore();
+  const last = demoFrame.getBoundingClientRect();
+  gsap.set(demoFrame, { transformOrigin: "0 0" });
+  expandTween = gsap.fromTo(
+    demoFrame,
+    { x: first.left - last.left, y: first.top - last.top, scaleX: first.width / last.width, scaleY: first.height / last.height },
+    {
+      x: 0,
+      y: 0,
+      scaleX: 1,
+      scaleY: 1,
+      duration: LIVE_DEMO.expandDuration,
+      ease: LIVE_DEMO.expandEase,
+      onComplete: () => {
+        gsap.set(demoFrame, { clearProps: "transform,transformOrigin" });
+        placeNote();
+      },
+    },
+  );
+  gsap.to(backdrop, {
+    opacity: 0,
+    duration: LIVE_DEMO.expandDuration,
+    ease: "power2.out",
+    onComplete: () => (backdrop.hidden = true),
+  });
+}
+
 // ---- The screenshot in the demo frame ---------------------------------------
 // public/demos/<slug>.png for the active project, loaded only when that record is picked. Two
 // stacked images let it crossfade into the next one; if the file is missing the frame keeps its
@@ -213,16 +507,11 @@ function onPanel(index, amount) {
 const demoImgs = [];
 let demoFront = null;
 let demoToken = 0;
-const dots = [];
 
 function setUpDemo() {
   if (!demoFrame || !demoBody || !demoShot) return;
   const root = document.documentElement.style;
-  root.setProperty("--image-fade", `${CALLOUTS.imageFade}s`);
-  root.setProperty("--dot-size", `${CALLOUTS.dotSize}px`);
-  root.setProperty("--dot-hot-scale", String(CALLOUTS.dotHotScale));
-  root.setProperty("--line-opacity", String(CALLOUTS.lineOpacity));
-  root.setProperty("--line-hot-opacity", String(CALLOUTS.lineHotOpacity));
+  root.setProperty("--image-fade", `${DEMO_IMAGE.fade}s`);
 
   for (let i = 0; i < 2; i++) {
     const img = document.createElement("img");
@@ -231,24 +520,6 @@ function setUpDemo() {
     img.decoding = "async";
     demoShot.append(img);
     demoImgs.push(img);
-  }
-  for (let i = 0; i < 3; i++) {
-    const dot = document.createElement("span");
-    dot.className = "hotspot";
-    dot.setAttribute("aria-hidden", "true");
-    dot.hidden = true;
-    demoBody.append(dot);
-    dots.push(dot);
-  }
-
-  // Dev only: click the screenshot to print a hotspot to paste into src/projects.js
-  if (import.meta.env.DEV) {
-    demoBody.addEventListener("click", (e) => {
-      const r = demoBody.getBoundingClientRect();
-      const x = Math.round(((e.clientX - r.left) / r.width) * 100) / 100;
-      const y = Math.round(((e.clientY - r.top) / r.height) * 100) / 100;
-      console.log(`hotspot { x: ${x}, y: ${y} }`);
-    });
   }
 
   // A screenshot that is missing in the page (the narrow-screen panel, the list view) is just hidden
@@ -265,19 +536,21 @@ function hideIfBrokenShot(el) {
 function loadDemo(index) {
   const panel = panels[index];
   if (!panel || !demoBody) return;
+  endLive(); // a newly picked project always starts on its screenshot
+  liveUrl = panel.dataset.liveUrl || "";
+  updateLiveButtons();
   const token = ++demoToken;
   if (demoHost) demoHost.textContent = panel.dataset.host || "";
-  setHotspots(panel);
 
   const url = `/demos/${panel.dataset.slug}.png`;
   const probe = new Image();
   probe.decoding = "async";
-  probe.onload = () => token === demoToken && showDemoImage(url, `Screenshot of ${titles[index]}`);
+  probe.onload = () => token === demoToken && showDemoImage(url, `Screenshot of ${titles[index]}`, probe.naturalWidth, probe.naturalHeight);
   probe.onerror = () => token === demoToken && showDemoPlaceholder();
   probe.src = url;
 }
 
-function showDemoImage(url, alt) {
+function showDemoImage(url, alt, width, height) {
   const incoming = demoImgs.find((img) => img !== demoFront) ?? demoImgs[0];
   incoming.alt = alt;
   incoming.src = url;
@@ -292,160 +565,17 @@ function showDemoImage(url, alt) {
     demoShot.classList.remove("no-fade");
   }
   demoBody.dataset.state = "image";
+  // The frame takes the screenshot's shape (clamped), before it grows in
+  frameAspect = width && height ? Math.min(DEMO_IMAGE.maxAspect, Math.max(DEMO_IMAGE.minAspect, width / height)) : SHOWCASE.frame.aspect;
+  placeFrame();
 }
 
 function showDemoPlaceholder() {
   demoFront?.classList.remove("is-front");
   demoFront = null;
   if (demoBody) demoBody.dataset.state = "placeholder";
-}
-
-function setHotspots(panel) {
-  let spots = [];
-  try {
-    spots = JSON.parse(panel.dataset.hotspots || "[]");
-  } catch {
-    /* no hotspots */
-  }
-  dots.forEach((dot, i) => {
-    const s = spots[i];
-    dot.hidden = !s;
-    if (s) {
-      dot.style.left = `${s.x * 100}%`;
-      dot.style.top = `${s.y * 100}%`;
-    }
-  });
-}
-
-// ---- Callouts: lines from the dots to the notes -----------------------------
-// One SVG over the page (fixed, no pointer events). The endpoints come from getBoundingClientRect
-// of each dot and note, redone on resize, scroll, a size change of the frame or the panel, and
-// when the project changes. The lines draw with stroke-dashoffset (pathLength 1, so a resize
-// never breaks them) and each note fades in as its line arrives.
-const SVG_NS = "http://www.w3.org/2000/svg";
-let calloutsOn = false;
-let calloutsEpoch = 0;
-let notes = [];
-let paths = [];
-let calloutsAbort = null;
-let calloutsObserver = null;
-
-function showCallouts() {
-  if (calloutsOn || compactQuery.matches || picked < 0 || !lineLayer || !demoFrame || demoFrame.hidden) return;
-  const panel = panels[picked];
-  if (!panel || panel.hidden) return;
-  cleanCallouts(); // anything still fading out from before
-  const epoch = ++calloutsEpoch;
-  calloutsOn = true;
-  notes = [...panel.querySelectorAll(".callout-note")];
-  shelf.dataset.callouts = "on";
-  demoBody.classList.add("callouts-on");
-
-  paths = notes.map(() => {
-    const path = document.createElementNS(SVG_NS, "path");
-    path.setAttribute("pathLength", "1");
-    path.style.strokeDasharray = "1";
-    lineLayer.append(path);
-    return path;
-  });
-  layoutCallouts();
-
-  // Highlight a note, its dot and its line together (hover or keyboard focus on either end)
-  calloutsAbort = new AbortController();
-  const { signal } = calloutsAbort;
-  const hot = (i, on) => {
-    notes[i]?.classList.toggle("is-hot", on);
-    dots[i]?.classList.toggle("is-hot", on);
-    paths[i]?.classList.toggle("is-hot", on);
-  };
-  notes.forEach((note, i) => {
-    for (const type of ["pointerenter", "focus"]) note.addEventListener(type, () => hot(i, true), { signal });
-    for (const type of ["pointerleave", "blur"]) note.addEventListener(type, () => hot(i, false), { signal });
-    dots[i].addEventListener("pointerenter", () => hot(i, true), { signal });
-    dots[i].addEventListener("pointerleave", () => hot(i, false), { signal });
-  });
-
-  // Anything that changes where a dot or a note is
-  calloutsObserver = new ResizeObserver(() => epoch === calloutsEpoch && layoutCallouts());
-  calloutsObserver.observe(demoFrame);
-  calloutsObserver.observe(panel);
-
-  if (reducedMotion()) return; // lines and dots appear at once, no drawing
-  const C = CALLOUTS;
-  notes.forEach((note, i) => {
-    const delay = i * C.stagger * 1000;
-    paths[i].animate([{ strokeDashoffset: 1 }, { strokeDashoffset: 0 }], {
-      duration: C.drawDuration * 1000,
-      delay,
-      easing: "ease-out",
-      fill: "both",
-    });
-    note.animate([{ opacity: 0 }, { opacity: 1 }], {
-      duration: C.noteFade * 1000,
-      delay: delay + C.drawDuration * 1000 * 0.7, // as its line arrives
-      fill: "both",
-    });
-    dots[i].style.setProperty("--delay", `${delay}ms`);
-    dots[i].classList.add("pulse"); // pulses once as it appears
-  });
-}
-
-function hideCallouts({ instant = false } = {}) {
-  if (!calloutsOn) return;
-  calloutsOn = false;
-  const epoch = ++calloutsEpoch;
-  calloutsObserver?.disconnect();
-  if (instant || reducedMotion()) {
-    cleanCallouts();
-    return;
-  }
-  // Fade the lines, dots and notes out (the frame only starts to shrink slowly)
-  const ms = CALLOUTS.fadeOutDuration * 1000;
-  lineLayer.animate([{ opacity: 1 }, { opacity: 0 }], { duration: ms, fill: "forwards" });
-  notes.forEach((note) => note.animate([{ opacity: 1 }, { opacity: 0 }], { duration: ms, fill: "forwards" }));
-  demoBody.classList.remove("callouts-on");
-  setTimeout(() => epoch === calloutsEpoch && cleanCallouts(), ms + 30);
-}
-
-function cleanCallouts() {
-  calloutsAbort?.abort();
-  calloutsAbort = null;
-  calloutsObserver?.disconnect();
-  lineLayer?.getAnimations().forEach((a) => a.cancel());
-  lineLayer?.replaceChildren();
-  notes.forEach((note) => {
-    note.getAnimations().forEach((a) => a.cancel());
-    note.classList.remove("is-hot");
-  });
-  dots.forEach((dot) => dot.classList.remove("pulse", "is-hot"));
-  demoBody?.classList.remove("callouts-on");
-  shelf.dataset.callouts = "off";
-  notes = [];
-  paths = [];
-}
-
-let layoutQueued = false;
-function layoutCallouts() {
-  if (!calloutsOn || layoutQueued) return;
-  layoutQueued = true;
-  requestAnimationFrame(() => {
-    layoutQueued = false;
-    if (!calloutsOn) return;
-    const C = CALLOUTS;
-    notes.forEach((note, i) => {
-      const dot = dots[i];
-      if (!dot || dot.hidden || !paths[i]) return;
-      const a = dot.getBoundingClientRect();
-      const b = note.getBoundingClientRect();
-      const x0 = a.left + a.width / 2;
-      const y0 = a.top + a.height / 2;
-      const x3 = b.left - C.noteGap; // ends just before the note's left edge, level with its title
-      const y3 = b.top + Math.min(b.height / 2, 16);
-      const x1 = x3 - C.elbow;
-      // one diagonal, then a short horizontal run into the note (a straight line if the dot is too far right)
-      paths[i].setAttribute("d", x1 > x0 ? `M${x0} ${y0} L${x1} ${y3} L${x3} ${y3}` : `M${x0} ${y0} L${x3} ${y3}`);
-    });
-  });
+  frameAspect = SHOWCASE.frame.aspect;
+  placeFrame();
 }
 
 // ---- State ------------------------------------------------------------------
@@ -504,6 +634,7 @@ function onStateChange(next, index) {
   const previous = uiState;
   uiState = next;
 
+  if (next !== "playing") endLive();
   if (next === "transitioning") {
     transitionStart = performance.now();
     active = -1;
@@ -556,20 +687,28 @@ export function initShelf() {
     render();
     placePanel();
     if (compactQuery.matches) {
-      hideCallouts({ instant: true });
+      endLive();
       if (demoFrame) demoFrame.hidden = true;
     }
   });
   window.addEventListener("resize", () => {
     placePanel();
     placeFrame();
-    layoutCallouts();
+    if (liveExpanded) applyExpandedBox();
+    placeNote();
   });
-  window.addEventListener("scroll", layoutCallouts, { passive: true }); // the lines are fixed, the page is not
   setUpDemo();
+  setUpLive();
 
   document.addEventListener("keydown", (e) => {
-    if (e.key !== "Escape" || !scene) return;
+    if (e.key !== "Escape") return;
+    // While a demo is live Escape works in steps: collapse EXPAND, then back to the screenshot, then (next time) eject
+    if (liveMode !== "off") {
+      if (liveExpanded) collapseLive();
+      else endLive({ returnFocus: true });
+      return;
+    }
+    if (!scene) return;
     if (uiState === "playing") requestEject();
     else if (uiState === "transitioning") scene.skip();
   });
@@ -622,7 +761,7 @@ export async function enterShelf() {
 
 export function leaveShelf() {
   entered = false;
-  hideCallouts({ instant: true });
+  endLive();
   // Nothing of a playing record may be left behind for the next visit
   panels.forEach((panel) => (panel.hidden = true));
   if (demoFrame) demoFrame.hidden = true;

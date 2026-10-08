@@ -100,20 +100,40 @@
         </div>
 
         <!-- The showcase: a window with the active project's screenshot (public/demos/<slug>.png,
-             set up by src/shelf.js, with this placeholder as the fallback) -->
+             set up by src/shelf.js, with this placeholder as the fallback). "Try it live" mounts the
+             project's site in an iframe inside [data-demo-live] (only on a click). -->
         <section class="demo-frame" id="demo-frame" data-demo aria-label="Project demo" hidden>
-          <div class="demo-bar" aria-hidden="true">
-            <span class="demo-dots"><i></i><i></i><i></i></span>
-            <span class="label demo-host" data-demo-host></span>
+          <div class="demo-bar">
+            <span class="demo-dots" aria-hidden="true"><i></i><i></i><i></i></span>
+            <span class="label demo-host" data-demo-host aria-hidden="true"></span>
+            <div class="demo-actions">
+              <button type="button" class="label demo-btn" data-live-start hidden>Try it live</button>
+              <a class="label demo-btn" data-live-open target="_blank" rel="noopener noreferrer" hidden>Open in new tab</a>
+              <button type="button" class="label demo-btn" data-live-expand hidden>Expand</button>
+              <button type="button" class="label demo-btn" data-live-back hidden>Back to screenshot</button>
+            </div>
           </div>
           <div class="demo-body" data-demo-body data-state="placeholder">
             <p class="label demo-placeholder">Demo placeholder</p>
             <div class="demo-shot" data-demo-shot></div>
+            <div class="demo-live" data-demo-live hidden>
+              <div class="demo-stage" data-demo-stage></div>
+              <div class="demo-loading" data-demo-loading>
+                <span class="demo-progress"></span>
+                <p class="label">Loading demo…</p>
+              </div>
+              <div class="demo-slow" data-demo-slow hidden>
+                <p>
+                  This demo is on free hosting and can take a while to wake up.
+                  <a data-live-open-slow target="_blank" rel="noopener noreferrer">Open it in a new tab</a>
+                  if it doesn't appear.
+                </p>
+              </div>
+            </div>
           </div>
         </section>
+        <p class="label demo-note" id="demo-note" hidden></p>
 
-        <!-- Thin lines from the screenshot's hotspots to the notes in the info panel (wide screens) -->
-        <svg class="callout-lines" id="callout-lines" aria-hidden="true" focusable="false"></svg>
         <p class="label shelf-status" id="shelf-status" aria-live="polite"></p>
         <a class="list-link label" href="#/list">View as list</a>
       </section>

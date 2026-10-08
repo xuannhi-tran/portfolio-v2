@@ -139,9 +139,8 @@ export function demoHost(p) {
 }
 
 // The info panel for every project (shown one at a time on the right while a record plays).
-// Real HTML written at build time; src/shelf.js only shows and hides it. The three notes are
-// the callouts that the showcase connects to the screenshot with thin lines. On narrow screens
-// there are no lines: the screenshot sits above the notes as a plain list.
+// Real HTML written at build time; src/shelf.js only shows and hides it. The three notes are a
+// numbered "Tracklist". On narrow screens the screenshot sits above them.
 export function renderPanels(projects) {
   return projects
     .map((p, i) => {
@@ -157,20 +156,21 @@ export function renderPanels(projects) {
         .join("\n            ");
       const notes = (p.tracks ?? [])
         .map(
-          (t, n) => `<li class="callout-note" tabindex="0" data-n="${n}">
-              <p class="track-name label">${escapeHtml(t.name)}</p>
+          (t, n) => `<li class="panel-track">
+              <p class="track-name label">${String(n + 1).padStart(2, "0")} ${escapeHtml(t.name)}</p>
               <p class="track-text">${escapeHtml(t.text)}</p>
             </li>`,
         )
         .join("\n            ");
-      return `      <section class="panel" data-index="${i}" data-slug="${escapeHtml(p.slug)}" data-host="${escapeHtml(demoHost(p))}" data-hotspots="${escapeHtml(JSON.stringify(p.hotspots ?? []))}" aria-labelledby="panel-title-${escapeHtml(p.slug)}" hidden>
+      return `      <section class="panel" data-index="${i}" data-slug="${escapeHtml(p.slug)}" data-host="${escapeHtml(demoHost(p))}" data-live-url="${escapeHtml(p.liveEnabled && p.demoUrl ? p.demoUrl : "")}" data-live-note="${escapeHtml(p.liveNote ?? "")}" aria-labelledby="panel-title-${escapeHtml(p.slug)}" hidden>
           <p class="label panel-side">Side ${escapeHtml(p.side)} · ${escapeHtml(p.year)}</p>
           <h3 class="panel-title" id="panel-title-${escapeHtml(p.slug)}" tabindex="-1">${escapeHtml(p.title)}</h3>
           <p class="panel-desc">${escapeHtml(p.description)}</p>
           <img class="shot panel-shot" src="${screenshotUrl(p)}" alt="Screenshot of ${escapeHtml(p.title)}" loading="lazy" decoding="async">
-          <ul class="callouts" aria-label="Notes">
+          <p class="label panel-tracks-title" id="panel-tracks-${escapeHtml(p.slug)}">Tracklist</p>
+          <ol class="panel-tracks" aria-labelledby="panel-tracks-${escapeHtml(p.slug)}">
             ${notes}
-          </ul>
+          </ol>
           <p class="stack label">${escapeHtml(p.stack)}</p>
           <div class="panel-links">
             ${links}

@@ -518,7 +518,7 @@ h2 {
    scene's timeline, so there is no CSS transition for it (except with reduced motion, below). */
 .info {
   position: absolute;
-  z-index: 2; /* above the callout lines */
+  z-index: 2;
   display: flex;
   align-items: flex-start;
   pointer-events: none;
@@ -585,9 +585,12 @@ h2 {
   margin-bottom: 1.2rem;
 }
 
-/* The three notes. On wide screens they are the callouts: a line from the screenshot ends at each
-   one's left edge. */
-.callouts {
+/* The three notes, numbered like a tracklist */
+.panel-tracks-title {
+  margin-bottom: 0.5rem;
+}
+
+.panel-tracks {
   display: grid;
   gap: 0.35rem;
   margin: 0 0 1.1rem;
@@ -595,21 +598,9 @@ h2 {
   list-style: none;
 }
 
-.callout-note {
+.panel-track {
   padding: 0.35rem 0 0.35rem 0.8rem;
   border-left: 1px solid var(--line);
-  transition: border-color 0.2s;
-}
-
-.callout-note.is-hot,
-.callout-note:hover,
-.callout-note:focus-visible {
-  border-left-color: var(--text);
-}
-
-.callout-note:focus-visible {
-  outline: 1px solid var(--muted);
-  outline-offset: 2px;
 }
 
 .track-name {
@@ -683,7 +674,7 @@ h2 {
   height: 2rem;
   padding: 0 0.9rem;
   border-bottom: 1px solid var(--line);
-  background: rgba(255, 255, 255, 0.04);
+  background: #0e0e0e; /* solid, so nothing shows through it when the frame is expanded */
 }
 
 .demo-dots {
@@ -709,6 +700,7 @@ h2 {
 
 .demo-body {
   position: relative;
+  background: #0b0b0b; /* shows in any space a clamped screenshot leaves */
   flex: 1;
   min-height: 0;
   display: grid;
@@ -726,8 +718,8 @@ h2 {
   inset: 0;
   width: 100%;
   height: 100%;
-  object-fit: cover;
-  object-position: top;
+  object-fit: contain; /* never cropped: the frame takes the screenshot's shape (src/shelf.js), this is the safety net */
+  object-position: top left;
   opacity: 0;
   transition: opacity var(--image-fade, 0.3s) ease;
 }
@@ -745,78 +737,200 @@ h2 {
   visibility: hidden;
 }
 
-/* The dots on the screenshot; each is joined to a note by a line (the SVG overlay below) */
-.hotspot {
+/* Title bar buttons: "Try it live", and while it is live: Open in new tab / Expand / Back to screenshot */
+.demo-actions {
+  display: flex;
+  flex: none;
+  gap: 0.5rem;
+  margin-left: auto;
+}
+
+.demo-btn {
+  margin: 0;
+  padding: 0.12rem 0.65rem;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: none;
+  color: var(--text);
+  font-family: var(--mono);
+  font-size: 0.68rem;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  text-decoration: none;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: background 0.2s, color 0.2s, border-color 0.2s;
+}
+
+.demo-btn:hover {
+  background: var(--text);
+  color: var(--bg);
+  border-color: var(--text);
+}
+
+.demo-btn:focus-visible {
+  outline: 2px solid var(--text);
+  outline-offset: 3px;
+}
+
+.demo-btn[hidden] {
+  display: none;
+}
+
+/* The live demo: an iframe laid out at a fixed virtual width and scaled down to fit (src/shelf.js) */
+.demo-live {
   position: absolute;
-  width: var(--dot-size, 10px);
-  height: var(--dot-size, 10px);
-  margin: calc(var(--dot-size, 10px) / -2) 0 0 calc(var(--dot-size, 10px) / -2);
-  border-radius: 50%;
+  inset: 0;
+  z-index: 2;
+}
+
+.demo-live[hidden] {
+  display: none;
+}
+
+.demo-stage {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+}
+
+.demo-iframe {
+  position: absolute;
+  top: 0;
+  left: 0;
+  border: 0;
   background: #fff;
-  box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.55);
+  transform-origin: 0 0;
   opacity: 0;
-  transform: scale(0.4);
-  transition: opacity 0.25s, transform 0.25s;
+  transition: opacity var(--live-fade, 0.3s) ease;
 }
 
-.demo-body.callouts-on .hotspot {
+.demo-iframe.is-loaded {
   opacity: 1;
-  transform: scale(1);
 }
 
-.demo-body.callouts-on .hotspot.is-hot {
-  transform: scale(var(--dot-hot-scale, 1.7));
+.demo-loading {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  pointer-events: none;
+  transition: opacity 0.3s;
 }
 
-.hotspot.pulse::after {
+.demo-loading[hidden] {
+  display: none;
+}
+
+.demo-loading.is-done {
+  opacity: 0;
+}
+
+.demo-loading p {
+  margin: 0;
+  padding: 0.3rem 0.8rem;
+  border-radius: 999px;
+  background: rgba(0, 0, 0, 0.7); /* readable over the screenshot, which stays visible until the page has loaded */
+}
+
+.demo-progress {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 2px;
+  overflow: hidden;
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.demo-progress::after {
   content: "";
   position: absolute;
-  inset: 0;
-  border-radius: 50%;
-  border: 1px solid #fff;
-  animation: hotspot-pulse 0.9s ease-out var(--delay, 0ms) 1 both;
+  top: 0;
+  bottom: 0;
+  width: 30%;
+  background: rgba(255, 255, 255, 0.7);
+  animation: demo-progress 1.4s ease-in-out infinite;
 }
 
-@keyframes hotspot-pulse {
+@keyframes demo-progress {
   from {
-    transform: scale(1);
-    opacity: 0.9;
+    left: -30%;
   }
   to {
-    transform: scale(3.2);
-    opacity: 0;
+    left: 100%;
   }
 }
 
-/* The lines: one SVG over the page, above the canvas and the frame, below the info panel */
-.callout-lines {
+.demo-slow {
+  position: absolute;
+  left: 0.9rem;
+  right: 0.9rem;
+  bottom: 0.9rem;
+  z-index: 1;
+  padding: 0.7rem 0.9rem;
+  border: 1px solid var(--line);
+  border-radius: 0.5rem;
+  background: rgba(0, 0, 0, 0.88);
+  font-size: 0.95rem;
+  line-height: 1.35;
+  color: #cfcfcf;
+}
+
+.demo-slow[hidden] {
+  display: none;
+}
+
+.demo-slow p {
+  margin: 0;
+}
+
+.demo-slow a {
+  color: var(--text);
+}
+
+/* A caption under the frame while the demo is live (liveNote in src/projects.js) */
+.demo-note {
+  position: absolute;
+  margin: 0;
+}
+
+.demo-note[hidden] {
+  display: none;
+}
+
+/* EXPAND: the same frame element is resized in place (src/shelf.js animates it with GSAP) */
+.demo-frame.is-expanded {
+  position: fixed;
+  z-index: 4;
+}
+
+.demo-backdrop {
   position: fixed;
   inset: 0;
-  z-index: 1;
-  width: 100%;
-  height: 100%;
-  overflow: visible;
+  z-index: 3;
+  background: #000;
+  opacity: 0;
+  cursor: pointer;
+  pointer-events: auto;
+}
+
+.demo-backdrop[hidden] {
+  display: none;
+}
+
+/* While a demo is live: the 3D canvas ignores the pointer, and the page behind does not scroll
+   (the gutter stays reserved, so nothing shifts) */
+.shelf[data-live="on"] .scene {
   pointer-events: none;
 }
 
-.callout-lines path {
-  fill: none;
-  stroke: #fff;
-  stroke-opacity: var(--line-opacity, 0.5);
-  stroke-width: 1;
-  vector-effect: non-scaling-stroke;
-  transition: stroke-opacity 0.2s;
+html {
+  scrollbar-gutter: stable;
 }
 
-.callout-lines path.is-hot {
-  stroke-opacity: var(--line-hot-opacity, 0.95);
-}
-
-/* Wide screens: the notes only appear when their lines do (src/shelf.js fades them in) */
-@media (min-width: 48.01rem) {
-  .shelf:not([data-callouts="on"]) .callout-note {
-    visibility: hidden;
-  }
+html.demo-live {
+  overflow: hidden;
 }
 
 /* The list view shows the same notes, with the screenshot above them */
@@ -839,10 +953,9 @@ h2 {
   display: block;
 }
 
-/* Narrow screens: no showcase and no lines. The screenshot sits above a plain list of notes. */
+/* Narrow screens: no showcase. The screenshot sits above a plain list of notes. */
 @media (max-width: 48rem) {
-  .demo-frame,
-  .callout-lines {
+  .demo-frame {
     display: none;
   }
 
@@ -865,8 +978,14 @@ h2 {
   .shelf .panel,
   .demo-frame,
   .demo-img,
-  .hotspot {
+  .demo-iframe {
     transition: opacity 0.2s ease !important;
+  }
+
+  .demo-progress::after {
+    animation: none;
+    left: 0;
+    width: 100%;
   }
 
   * {
