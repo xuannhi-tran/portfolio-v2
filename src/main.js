@@ -3,7 +3,7 @@
 //   #/projects             scrolls to the Projects section
 //   #/projects/<slug>      scrolls there and opens that record
 //   #/about, #/contact     scroll to those sections (#about / #contact still work)
-//   #/list                 the static cards (the fallback view, replaces the page)
+//   #/list                 scrolls to the Projects section and shows it as a list (also the no-WebGL fallback)
 // Without JS every section is visible, so the content stays readable.
 //
 // Clicking a link to a section scrolls smoothly (and adds a history entry, even when the hash is already the
@@ -11,10 +11,11 @@
 // first scroll of a page load is always instant.
 
 import { initAbout } from "./about.js";
+import { initBackground } from "./background.js";
 import { initHero } from "./hero.js";
-import { initShelf, enterShelf, leaveShelf, syncShelfRoute, closeRecord, isRecordOpen } from "./shelf.js";
+import { initShelf, enterShelf, leaveShelf, syncShelfRoute, closeRecord, isRecordOpen, setMode, isListMode } from "./shelf.js";
 
-const views = document.querySelectorAll("[data-view]");
+const sections = document.querySelectorAll("main > section");
 const reduced = () => matchMedia("(prefers-reduced-motion: reduce)").matches;
 
 // Where each route goes: the section (its id), and the heading that takes focus
@@ -34,7 +35,7 @@ for (const type of ["wheel", "touchmove", "keydown"]) addEventListener(type, () 
 
 function parse(hash) {
   if (!hash || hash === "#" || hash === "#/" || hash === "#cover") return { name: "cover" };
-  if (hash === "#/list") return { view: "list" };
+  if (hash === "#/list") return { name: "projects", slug: null, list: true }; // the Projects section in list mode
   const project = hash.match(/^#\/projects(?:\/([\w-]+))?$/);
   if (project) return { name: "projects", slug: project[1] ?? null }; // an unknown slug is sent back to #/projects by the shelf
   if (hash === "#/about" || hash === "#about") return { name: "about" };
@@ -52,7 +53,7 @@ function route({ user = false } = {}) {
     unmountDev?.();
     unmountDev = null;
     if (hash === "#/dev/turntable") {
-      views.forEach((el) => {
+      sections.forEach((el) => {
         el.hidden = true;
       });
       leaveShelf();
@@ -68,21 +69,16 @@ function route({ user = false } = {}) {
     location.replace(target.redirect);
     return;
   }
-  const view = target.view ?? "home";
-  views.forEach((el) => {
-    el.hidden = el.dataset.view !== view;
+  sections.forEach((el) => {
+    el.hidden = false; // (the dev preview hides them)
   });
 
   const wasFirst = firstRoute;
   const behavior = firstRoute || reduced() ? "auto" : "smooth";
   firstRoute = false;
 
-  if (view === "list") {
-    window.scrollTo(0, 0);
-    leaveShelf();
-    return;
-  }
-
+  // A click on the Projects link keeps the mode the section is in; a URL, back and forward say which mode they want
+  const listWanted = isListMode();
   const go = () => {
     const section = SECTIONS[target.name];
     const el = document.getElementById(section.id);
@@ -102,6 +98,7 @@ function route({ user = false } = {}) {
     if (!target.slug) document.getElementById(section.heading)?.focus({ preventScroll: true });
     // A record is only open for a #/projects/<slug> route; any other route closes it
     if (target.slug) enterShelf();
+    if (target.name === "projects") setMode(target.list || (!target.slug && user && listWanted) ? "list" : "records");
     syncShelfRoute(target.slug ?? null);
   };
 
@@ -116,9 +113,10 @@ document.addEventListener("click", (e) => {
   if (e.defaultPrevented || e.button !== 0 || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;
   const link = e.target.closest?.("a[href^='#']");
   if (!link) return;
-  const hash = link.getAttribute("href");
+  let hash = link.getAttribute("href");
   const target = parse(hash);
-  if (!target.name) return; // #/list and the like: the browser handles it (hashchange)
+  if (!target.name) return;
+  if (hash === "#/projects" && isListMode()) hash = "#/list"; // the nav link keeps the list
   e.preventDefault();
   if (location.hash !== hash) history.pushState(null, "", hash);
   route({ user: true });
@@ -153,6 +151,12 @@ window.addEventListener("scroll", () => {
   navTick = requestAnimationFrame(markNav);
 }, { passive: true });
 
+initBackground();
+// The section heads are as wide as the screen: --vw is the width of <main> (the page without the scrollbar; 100vw would include it)
+const main = document.querySelector("main");
+const setVw = () => document.documentElement.style.setProperty("--vw", `${main.getBoundingClientRect().width}px`);
+new ResizeObserver(setVw).observe(main);
+setVw();
 initShelf();
 initAbout();
 initHero();

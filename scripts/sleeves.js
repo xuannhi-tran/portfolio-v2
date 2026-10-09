@@ -113,7 +113,7 @@ export function renderTracks(projects) {
     let group = sides.find((s) => s.side === p.side);
     if (!group) sides.push((group = { side: p.side, items: [] }));
     group.items.push(`            <li>
-              <button type="button" class="track" data-index="${i}" data-slug="${escapeHtml(p.slug)}" data-short="${escapeHtml(p.shortTitle ?? p.title)}" aria-pressed="false">
+              <button type="button" class="track" data-index="${i}" data-slug="${escapeHtml(p.slug)}" data-short="${escapeHtml(p.shortTitle ?? p.title)}" data-stack="${escapeHtml(p.stack ?? "")}" aria-pressed="false">
                 <span class="track-title">${escapeHtml(p.title)}</span>
                 <span class="track-year label">${escapeHtml(p.year)}</span>
               </button>

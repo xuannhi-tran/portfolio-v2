@@ -246,7 +246,7 @@ export const ROW = {
   thin: 0.35, // standing sleeves are this fraction of the full thickness (the pile and the stack keep full thickness)
   hoverLiftY: 0.28, // a hovered / focused sleeve rises this much...
   hoverLiftZ: 0.1, // ...and comes this far towards the camera
-  labelGap: 14, // px between a sleeve's bottom edge and its hover label
+  // (the captions under the sleeves: --cap-gap and --cap-h in style.css say how much room each one takes)
   stagger: 0.06, // s between one sleeve and the next
   duration: 0.8, // s, each sleeve spreading out from the pile
   ease: "power3.out",
@@ -262,4 +262,19 @@ export const ROW = {
   swapAt: 0.2, // s into a pick from the row where the record is still in its sleeve: a swap plays back to here
   backFade: 0.3, // s, after a swapped record is ejected: the stack fades out, then the row fades back in
   ejectSpeed: 1.5, // Back / Escape plays the timeline backwards this much faster than it went forwards
+};
+
+// LIST_MODE: the Records / List toggle of the Projects section (src/shelf.js). Times are seconds.
+// Records -> List: the sleeves sink and fade (the select timeline's fade, no sideways travel), the canvas stops, then the
+// section's height eases to the list's and the rows fade up one after the other. List -> Records is the reverse: the rows
+// fade out, the height eases back, then the canvas resumes and the sleeves spread out from the pile as on a first visit.
+export const LIST_MODE = {
+  sleevesOut: 0.3, // the sleeves and captions fade out / sink
+  height: 0.4, // the section's height eases to the other mode's
+  rowsAt: 0.3, // the rows start fading up this long after the start (the end of sleevesOut)
+  rowDuration: 0.3, // each row's fade
+  rowStagger: 0.06, // between one row and the next
+  rise: 12, // px the rows rise by while they fade in
+  rowsOut: 0.2, // List -> Records: the rows fade out (together, sinking a little)
+  ease: "power2.inOut",
 };

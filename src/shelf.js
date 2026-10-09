@@ -18,7 +18,7 @@
 // Routes: #/projects (the stack) and #/projects/<slug> (that record playing). Picking, swapping and
 // ejecting update the hash; opening a URL, back and forward jump straight to the state, no animation.
 
-import { COMPACT, DEMO_IMAGE, LIVE_DEMO, PANEL, ROW, SHOWCASE } from "./scene/tweaks.js";
+import { COMPACT, DEMO_IMAGE, LIST_MODE, LIVE_DEMO, PANEL, ROW, SHOWCASE } from "./scene/tweaks.js";
 
 const shelf = document.querySelector(".shelf");
 const crate = document.querySelector(".crate");
@@ -603,19 +603,58 @@ function showDemoPlaceholder() {
   placeFrame();
 }
 
-// ---- The label under a hovered / focused sleeve ----------------------------------
-// The scene says where it goes (viewport px) every frame, since the row moves with the page.
-let labelEl = null;
-function showLabel(i, x, y) {
-  if (!labelEl) return;
-  if (i < 0) {
-    labelEl.hidden = true;
-    return;
-  }
-  labelEl.textContent = shortTitles[i];
-  labelEl.hidden = false;
-  labelEl.style.left = `${x}px`;
-  labelEl.style.top = `${y}px`;
+// ---- The captions under the sleeves of the row -------------------------------------
+// One per project (short title, then the stack, both from src/projects.js through the track buttons). The scene says where
+// each sleeve is every frame, since the row moves with the page, and when a caption should be off (a record is picked).
+let capsLayer = null;
+let caps = [];
+const stacks = tracks.map((t) => t.dataset.stack || "");
+function buildCaptions() {
+  capsLayer = document.createElement("div");
+  capsLayer.className = "sleeve-caps";
+  capsLayer.setAttribute("aria-hidden", "true"); // the sleeves' own buttons say the same
+  caps = tracks.map((_, i) => {
+    const el = document.createElement("div");
+    el.className = "sleeve-cap";
+    const text = document.createElement("div");
+    text.className = "cap-text";
+    const title = document.createElement("span");
+    title.className = "cap-title";
+    title.textContent = shortTitles[i];
+    text.append(title);
+    if (stacks[i]) {
+      const stack = document.createElement("span");
+      stack.className = "cap-stack";
+      stack.textContent = stacks[i];
+      text.append(stack);
+    }
+    el.append(text);
+    el._last = "";
+    capsLayer.append(el);
+    return el;
+  });
+  shelf.append(capsLayer);
+  // A real focus ring (keyboard focus only) round the sleeve and its caption: the focused control is the hidden track button
+  tracks.forEach((track, i) => {
+    const ring = () => caps[i].classList.toggle("is-focus", usingKeyboard && track.matches(":focus-visible"));
+    track.addEventListener("focus", ring);
+    track.addEventListener("blur", ring);
+  });
+}
+
+function showLabel(i, place) {
+  const el = caps[i];
+  if (!el) return;
+  el.classList.toggle("is-on", !!place);
+  if (!place) return; // fading out where it is
+  const w = Math.round(place.size);
+  const key = `${Math.round(place.x - place.size / 2)},${Math.round(place.top)},${w}`;
+  if (key === el._last) return;
+  el._last = key;
+  el.style.width = `${w}px`;
+  el.style.setProperty("--lift", `${Math.round(place.lift)}px`); // how far the sleeve rises when focused: the ring reaches over it
+  el.style.height = `${w}px`;
+  el.style.transform = `translate3d(${Math.round(place.x - place.size / 2)}px, ${Math.round(place.top)}px, 0)`;
 }
 
 // ---- Scroll lock -------------------------------------------------------------------
@@ -709,7 +748,7 @@ function setActive(i) {
 }
 
 function requestPick(i) {
-  if (!scene) return;
+  if (!scene || modeTl) return; // not while the row and the list are swapping
   if (uiState === "stack") {
     lastAction = "pick";
     scene.pick(i);
@@ -812,6 +851,9 @@ export function closeRecord() {
 
 export function initShelf() {
   buildPlayControls();
+  import("gsap").then((m) => (gsapNow = m.default));
+  modeButtons.forEach((b) => b.addEventListener("click", () => switchMode(b.dataset.mode)));
+  if (!webglAvailable()) fallBackToList();
 
   tracks.forEach((track, i) => wireItem(track, i));
   ejectButton?.addEventListener("click", requestEject);
@@ -848,11 +890,7 @@ export function initShelf() {
     placeFrame();
   });
 
-  labelEl = document.createElement("p");
-  labelEl.className = "label sleeve-label";
-  labelEl.setAttribute("aria-hidden", "true"); // the sleeve's own button says the same
-  labelEl.hidden = true;
-  shelf.append(labelEl);
+  buildCaptions();
 
   // Left / right arrows move along the row (the keyboard path to the sleeves); Enter picks the focused one
   document.querySelector(".tracklist")?.addEventListener("keydown", (e) => {
@@ -885,9 +923,162 @@ export function initShelf() {
   render();
 }
 
-// No WebGL: the list view is the experience.
+// ---- Modes: "records" (the row of sleeves) and "list" (the tracklist rows) -----------------------------
+// Both live inside the Projects section, under its heading, one at a time (.shelf-body holds the two layers). The toggle
+// on the "Pick a record" line animates the switch (LIST_MODE in tweaks.js); a URL, back and forward and the no-WebGL
+// fallback switch at once. Without WebGL only the list exists.
+const body = shelf.querySelector("[data-shelf-body]");
+const recordsLayer = body.querySelector(".shelf-layout");
+const listLayer = body.querySelector("[data-shelf-list]");
+const modeButtons = [...shelf.querySelectorAll(".mode-btn")];
+const modeLabel = shelf.querySelector(".shelf-label");
+const modeLabels = { records: modeLabel?.textContent ?? "", list: "All projects" };
+let mode = "records";
+let noWebGL = false;
+let modeTl = null; // the running animated switch
+let modeTarget = null; // ...and the mode it is going to
+let shareNow = 0; // how much of the section is on screen (the activation observer)
+let gsapNow = null;
+const listRows = () => [...listLayer.querySelectorAll(".row")];
+
+export const isListMode = () => mode === "list";
+
+function paintMode(next) {
+  mode = next;
+  shelf.dataset.mode = next;
+  modeButtons.forEach((b) => b.setAttribute("aria-pressed", String(b.dataset.mode === next)));
+  if (modeLabel) modeLabel.textContent = modeLabels[next];
+}
+
+// The layers as they are at rest: one shown, nothing measured or laid over, the height free again
+function settleLayers(next) {
+  recordsLayer.hidden = next === "list";
+  listLayer.hidden = next !== "list";
+  [recordsLayer, listLayer].forEach((l) => l.classList.remove("is-measure", "is-overlay"));
+  body.style.height = "";
+  body.style.overflow = "";
+  listRows().forEach((r) => {
+    r.style.opacity = "";
+    r.style.transform = "";
+  });
+  htmlElement.classList.remove("mode-switching");
+  shelf.classList.remove("is-switching");
+}
+
+// Switch at once (no animation)
+function applyMode(next) {
+  if (noWebGL) next = "list";
+  if (modeTl) {
+    modeTl.kill();
+    modeTl = null;
+    modeTarget = null;
+  }
+  scene?.fadeRow(false, 0);
+  paintMode(next);
+  settleLayers(next);
+  if (next === "list") hideCanvas({ instant: true });
+  else if (shareNow >= ROW.enterAt) showCanvas();
+  scene?.relayout();
+}
+
+// For the router: a URL, back / forward, the alias #/list. A record that is open is closed first.
+export function setMode(next) {
+  if (noWebGL) next = "list";
+  if (next === "list" && scene && uiState !== "stack") {
+    wantedSlug = null;
+    routing = true;
+    scene.jumpTo(-1);
+    routing = false;
+  }
+  if (next === mode && !modeTl) return;
+  applyMode(next);
+}
+
+function updateModeHash(next) {
+  history.replaceState(null, "", next === "list" ? "#/list" : "#/projects"); // no history entry, no scrolling
+}
+
+// The toggle: animated
+function switchMode(next) {
+  if (noWebGL || uiState !== "stack") return;
+  if (next === (modeTl ? modeTarget : mode)) return; // already there, or already on its way
+  if (modeTl) modeTl.progress(1); // a switch in progress is finished first (its end state), then the new one starts
+  if (reducedMotion() || !scene || !gsapNow) {
+    applyMode(next);
+    updateModeHash(next);
+    return;
+  }
+  const gsap = gsapNow;
+  const T = LIST_MODE;
+  const pad = parseFloat(getComputedStyle(body).paddingTop) || 0;
+  const incoming = next === "list" ? listLayer : recordsLayer;
+  const fromH = body.offsetHeight;
+  // How tall the arriving layer is, measured out of the flow (invisible)
+  incoming.hidden = false;
+  incoming.classList.add("is-measure");
+  const toH = incoming.offsetHeight + pad;
+  incoming.classList.remove("is-measure");
+  incoming.hidden = true;
+
+  htmlElement.classList.add("mode-switching");
+  shelf.classList.add("is-switching");
+  body.style.height = `${fromH}px`;
+  body.style.overflow = "hidden";
+  paintMode(next);
+  modeTarget = next;
+  updateModeHash(next);
+
+  const rows = listRows();
+  const done = () => {
+    modeTl = null;
+    modeTarget = null;
+    settleLayers(next);
+    if (next === "records") {
+      scene.relayout();
+      if (shareNow >= ROW.enterAt) showCanvas(); // the sleeves spread out from the pile, as on a first visit
+    }
+  };
+  const tl = gsap.timeline({ onComplete: done });
+  modeTl = tl;
+  tl.eventCallback("onInterrupt", null);
+  if (next === "list") {
+    gsap.set(rows, { opacity: 0, y: T.rise });
+    scene.fadeRow(true, T.sleevesOut);
+    tl.add(() => {
+      hideCanvas({ instant: true }); // the render loop stops with the canvas
+      recordsLayer.hidden = true;
+      listLayer.hidden = false;
+      listLayer.classList.add("is-overlay");
+    }, T.sleevesOut)
+      .to(body, { height: toH, duration: T.height, ease: T.ease }, T.sleevesOut)
+      .to(rows, { opacity: 1, y: 0, duration: T.rowDuration, stagger: T.rowStagger, ease: "power2.out" }, T.rowsAt);
+  } else {
+    tl.to(rows, { opacity: 0, y: T.rise / 2, duration: T.rowsOut, ease: "power1.in" }, 0)
+      .add(() => {
+        listLayer.hidden = true;
+        recordsLayer.hidden = false;
+        recordsLayer.classList.add("is-overlay");
+      }, T.rowsOut)
+      .to(body, { height: toH, duration: T.height, ease: T.ease }, T.rowsOut);
+  }
+}
+
+function webglAvailable() {
+  try {
+    const test = document.createElement("canvas");
+    return !!(test.getContext("webgl2") || test.getContext("webgl"));
+  } catch {
+    return false;
+  }
+}
+
+// No WebGL: the list is the experience. The toggle is hidden, and the rows are plain headings (they cannot open a record).
 function fallBackToList() {
-  location.replace("#/list");
+  noWebGL = true;
+  htmlElement.classList.add("no-3d");
+  document.querySelectorAll(".row-head").forEach((a) => a.removeAttribute("href"));
+  applyMode("list");
+  if (location.hash !== "#/list") history.replaceState(null, "", "#/list");
 }
 
 // ---- Showing and hiding the canvas -----------------------------------------------
@@ -895,6 +1086,7 @@ let canvasOn = false;
 let wantCanvas = false;
 
 function showCanvas() {
+  if (mode === "list" || modeTl) return; // the list is shown, or a switch will bring the canvas back when it ends
   wantCanvas = true;
   if (!scene || canvasOn) return;
   canvasOn = true;
@@ -940,6 +1132,7 @@ function setUpActivation() {
   new IntersectionObserver(
     (entries) => {
       const share = visibleShare(entries[entries.length - 1]);
+      shareNow = share;
       if (share >= ROW.enterAt) {
         enterShelf();
         showCanvas();
@@ -973,7 +1166,7 @@ function prefetchDemos() {
 }
 
 export async function enterShelf() {
-  if (scene || creating || !canvas) return;
+  if (scene || creating || !canvas || noWebGL) return;
   creating = true;
 
   try {
@@ -991,6 +1184,7 @@ export async function enterShelf() {
       onPanel,
       onShowcase,
       onLabel: showLabel,
+      onClip: (clip) => capsLayer && (capsLayer.style.clipPath = clip),
     });
 
     scene = created;

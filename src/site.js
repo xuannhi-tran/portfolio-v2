@@ -6,4 +6,7 @@ export const site = {
   linkedin: "https://www.linkedin.com/in/xuannhi-tran",
   cv: "/assets/CV_Resume.pdf",
   cvFileName: "Vo_Xuan_Nhi_Tran_CV.pdf",
+  // The small row at the bottom of the first screen (left / right). An empty value hides that item.
+  heroLocation: "Sydney, AU",
+  heroStatus: "Open to internships",
 };

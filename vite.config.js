@@ -1,7 +1,7 @@
 import { existsSync, statSync } from "node:fs";
 import { resolve } from "node:path";
 import { pathToFileURL } from "node:url";
-import { renderTilePhoto, renderContactLinks, renderCoverLinks, renderCvButton } from "./scripts/site-links.js";
+import { renderTilePhoto, renderContactLinks, renderCoverLinks, renderCvButton, renderHeroFoot } from "./scripts/site-links.js";
 import { renderCovers, renderPanels, renderTracks, screenshotUrl } from "./scripts/sleeves.js";
 
 const dataFile = resolve(import.meta.dirname, "src/projects.js");
@@ -22,19 +22,32 @@ function renderCardTracks(p) {
   return `<ol class="card-tracks">${items}</ol>`;
 }
 
-function renderCard(p) {
+// The list mode of the Projects section: one row per project, like a tracklist. The header is a link that opens the record
+// (same route as the 3D row); the description, links and the notes stay under it.
+function renderCard(p, i) {
   const demo = p.demoUrl
-    ? `\n          <a href="${escapeHtml(p.demoUrl)}" target="_blank" rel="noopener noreferrer">Live demo</a>`
+    ? `
+            <a href="${escapeHtml(p.demoUrl)}" target="_blank" rel="noopener noreferrer">Live demo</a>`
     : "";
-  return `        <li class="card">
-          <p class="label">Side ${escapeHtml(p.side)} · ${escapeHtml(p.year)}</p>
-          <h3>${escapeHtml(p.title)}</h3>
-          <p>${escapeHtml(p.description)}</p>
-          <img class="shot card-shot" src="${screenshotUrl(p)}" alt="Screenshot of ${escapeHtml(p.title)}" loading="lazy" decoding="async">
-          <p class="stack label">${escapeHtml(p.stack)}</p>
-          ${renderCardTracks(p)}
-          <div class="card-links">
-          <a href="${escapeHtml(p.repoUrl)}" rel="noopener">Repo</a>${demo}
+  return `        <li class="row">
+          <a class="row-head" href="#/projects/${escapeHtml(p.slug)}">
+            <span class="row-num label">${String(i + 1).padStart(2, "0")}</span>
+            <span class="row-title">${escapeHtml(p.title)}</span>
+            <span class="row-leader" aria-hidden="true"></span>
+            <span class="row-meta label"><span class="row-stack">${escapeHtml(p.stack)}</span><span class="row-year">${escapeHtml(p.year)}</span></span>
+            <span class="row-arrow" aria-hidden="true">&rarr;</span>
+          </a>
+          <div class="row-body">
+            <p class="label row-side">Side ${escapeHtml(p.side)}</p>
+            <p class="row-desc">${escapeHtml(p.description)}</p>
+            <div class="row-links">
+            <a href="${escapeHtml(p.repoUrl)}" rel="noopener">Repo</a>${demo}
+            </div>
+            <details class="row-more">
+              <summary class="label">Notes and screenshot</summary>
+              <img class="shot card-shot" src="${screenshotUrl(p)}" alt="Screenshot of ${escapeHtml(p.title)}" loading="lazy" decoding="async">
+              ${renderCardTracks(p)}
+            </details>
           </div>
         </li>`;
 }
@@ -51,6 +64,7 @@ function projectCards() {
       const { site } = await import(`${pathToFileURL(siteFile).href}?t=${statSync(siteFile).mtimeMs}`);
       return html
         .replace("<!-- site-links-cover -->", renderCoverLinks(site))
+        .replace("<!-- site-hero-foot -->", renderHeroFoot(site))
         .replace("<!-- site-links-contact -->", renderContactLinks(site))
         .replace(/<!-- about-photo-(\d) -->/g, (_, n) =>
           renderTilePhoto(n, existsSync(resolve(import.meta.dirname, `public/about/tile-${n}.jpg`))),

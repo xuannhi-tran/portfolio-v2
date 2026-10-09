@@ -24,9 +24,10 @@ import * as K from "./tweaks.js"; // all the tweakable numbers live in tweaks.js
 // Callbacks: onHover(index | -1), onSelect(index) from the pointer,
 // onStateChange(state, index) whenever the state changes, and onPanel(index, amount 0..1)
 // while the info panel of that record should fade in / out (it is part of the timeline), and
-// onShowcase(progress 0..1) while the showcase layout (see SHOWCASE in tweaks.js) moves, and onLabel(index, x, y)
-// each frame while a sleeve of the row is hovered / focused (x, y = where its label goes, in viewport px; index -1 = none).
-export async function createShelfScene({ canvas, covers, onHover, onSelect, onStateChange, onPanel, onShowcase, onLabel }) {
+// onShowcase(progress 0..1) while the showcase layout (see SHOWCASE in tweaks.js) moves, and onLabel(index, place)
+// each frame for every sleeve of the row that shows a caption (place = { x: centre, top, size } of the sleeve in viewport px;
+// null = no caption for it now), and onClip(css clip-path) when the part of the page the canvas shows changes.
+export async function createShelfScene({ canvas, covers, onHover, onSelect, onStateChange, onPanel, onShowcase, onLabel, onClip }) {
   const reduceMotion = matchMedia("(prefers-reduced-motion: reduce)").matches;
   const devTools = import.meta.env.DEV && new URLSearchParams(location.search).has("dev"); // the scrub sliders: dev server with ?dev=1 only
   const compactQuery = matchMedia(K.COMPACT.query);
@@ -141,6 +142,7 @@ export async function createShelfScene({ canvas, covers, onHover, onSelect, onSt
   // rowK[i].v: 0 = sleeve i is in the pile (the collapsed stack's positions), 1 = in its place in the row.
   // enterRow() spreads them out once, staggered; resetRow() puts the pile back (while the canvas is hidden).
   const rowK = covers.map(() => ({ v: 0 }));
+  let rowHidden = false; // the list mode has taken the row away (fadeRow): no captions
   const rowOut = { v: 0 }; // browsing: 1 = the row is faded out (sunk by ROW.fadeDrift), 0 = shown
   function enterRow({ instant = false } = {}) {
     gsap.killTweensOf(rowK);
@@ -152,7 +154,21 @@ export async function createShelfScene({ canvas, covers, onHover, onSelect, onSt
   }
   function resetRow() {
     gsap.killTweensOf(rowK);
+    gsap.killTweensOf(rowOut);
+    rowOut.v = 0;
+    rowHidden = false;
     rowK.forEach((r) => (r.v = 0));
+  }
+  // The row fades out sinking (the same fade the other sleeves get when one is picked) or back in; the captions follow it
+  function fadeRow(out, duration, onComplete) {
+    rowHidden = out;
+    gsap.killTweensOf(rowOut);
+    if (reduceMotion || !duration) {
+      rowOut.v = out ? 1 : 0;
+      onComplete?.();
+      return;
+    }
+    gsap.to(rowOut, { v: out ? 1 : 0, duration, ease: out ? "power1.in" : "power2.out", onComplete });
   }
 
   // ---- State ---------------------------------------------------------------
@@ -413,6 +429,12 @@ export async function createShelfScene({ canvas, covers, onHover, onSelect, onSt
 
   // Where things sit on screen (the crate scrolls with the page, the canvas does not)
   let lastClip = "";
+  let lastRowY = NaN;
+  let capSpace = 0; // px under each sleeve of the row for its caption (--cap-gap + --cap-h, style.css)
+  function readCapSpace() {
+    const cs = getComputedStyle(shelfEl);
+    capSpace = (parseFloat(cs.getPropertyValue("--cap-gap")) || 0) + (parseFloat(cs.getPropertyValue("--cap-h")) || 0);
+  }
   function placeLayouts() {
     const rect = crate.getBoundingClientRect();
     const crateY = rect.top + rect.height / 2;
@@ -422,6 +444,7 @@ export async function createShelfScene({ canvas, covers, onHover, onSelect, onSt
     const clip = `inset(${Math.max(0, Math.round(section.top))}px 0 ${Math.max(0, Math.round(viewH - section.bottom))}px 0)`;
     if (clip !== lastClip) {
       canvas.style.clipPath = clip;
+      onClip?.(clip);
       lastClip = clip;
     }
 
@@ -430,18 +453,34 @@ export async function createShelfScene({ canvas, covers, onHover, onSelect, onSt
     const cols = compact ? Math.min(2, n) : n;
     const rows = Math.ceil(n / cols);
     const step = compact ? ROW.stepCompact : ROW.stepX;
+    // Each sleeve has a caption under it (capSpace px): it comes out of the height the row may take, and in the 2 x 2 grid it
+    // pushes the second row down by the same amount
     const worldW = (cols - 1) * step + 2;
-    const worldH = (rows - 1) * step + 2;
-    const px = Math.min((viewW * ROW.fillWidth) / worldW, (viewH * ROW.fillHeight) / worldH, ROW.maxSleevePx / 2);
+    const px = Math.min(
+      (viewW * ROW.fillWidth) / worldW,
+      (viewH * ROW.fillHeight - rows * capSpace) / ((rows - 1) * step + 2),
+      ROW.maxSleevePx / 2,
+    );
+    const stepY = rows > 1 ? step + capSpace / px : step;
+    const worldH = (rows - 1) * stepY + 2;
     layoutStack.zoom = px / scalePx;
     const labelEl = shelfEl.querySelector(".shelf-label");
     const headBottom = labelEl ? labelEl.getBoundingClientRect().bottom : section.top + 140;
     const areaTop = headBottom + ROW.gapBelowHeading;
     const areaBottom = Math.min(section.bottom, viewH) - ROW.bottomMargin; // the visible part of the section
-    layoutStack.y = Math.max(areaTop + (worldH * px) / 2, (areaTop + areaBottom) / 2); // centred in that space, never above it
+    layoutStack.y = Math.max(areaTop + (worldH * px) / 2, (areaTop + areaBottom - capSpace) / 2); // the sleeves and their captions centred in that space, never above it
+    // For the soft glow behind the row (CSS: .shelf::before), in the section's own coordinates so it never changes with the
+    // scroll (the row itself is centred in the visible part, which does): where the row sits when the section is in place
+    const topRel = headBottom - section.top + ROW.gapBelowHeading;
+    const bottomRel = Math.min(section.height, viewH) - ROW.bottomMargin;
+    const rowY = Math.round(Math.max(topRel + (worldH * px) / 2, (topRel + bottomRel - capSpace) / 2));
+    if (rowY !== lastRowY) {
+      shelfEl.style.setProperty("--row-y", `${rowY}px`);
+      lastRowY = rowY;
+    }
     sleeves.forEach((sl, i) => {
       sl.rowX = ((i % cols) - (cols - 1) / 2) * step;
-      sl.rowY = ((rows - 1) / 2 - Math.floor(i / cols)) * step + ROW.offsetY;
+      sl.rowY = ((rows - 1) / 2 - Math.floor(i / cols)) * stepY + ROW.offsetY;
     });
 
     let scale1;
@@ -461,11 +500,12 @@ export async function createShelfScene({ canvas, covers, onHover, onSelect, onSt
   }
 
   function layout() {
+    readCapSpace();
     const w = canvas.clientWidth;
     const h = canvas.clientHeight;
     const rect = crate.getBoundingClientRect();
     if (!w || !h || !rect.width || !rect.height) return;
-    renderer.setSize(w, h, false);
+    if (w !== viewW || h !== viewH) renderer.setSize(w, h, false);
     viewW = w;
     viewH = h;
 
@@ -500,6 +540,7 @@ export async function createShelfScene({ canvas, covers, onHover, onSelect, onSt
   const resizeObserver = new ResizeObserver(layout); // the viewport (canvas) and the crate column
   resizeObserver.observe(canvas);
   resizeObserver.observe(crate);
+  resizeObserver.observe(shelfEl); // the section's height changes when the list opens or closes: the clip and the row follow
   const onScroll = () => {
     placeLayouts();
     applyCamera();
@@ -593,7 +634,9 @@ export async function createShelfScene({ canvas, covers, onHover, onSelect, onSt
       // Perspective makes the upper sleeves look flatter, wider and further apart than the
       // lower ones, so tip and scale each one a little to even that out. In the row a sleeve
       // stands up and faces the camera, and is thinner.
-      toCamera.copy(camPos).sub(sleeveAt.set(0, y, 0));
+      // (a standing sleeve is drawn by a camera moved to its own height, so it is seen from straight ahead whatever its row:
+      // it keeps the size and tilt of a sleeve at height 0, which the grid on narrow screens needs for its second row)
+      toCamera.copy(camPos).sub(sleeveAt.set(0, y * (1 - standing), 0));
       const phi = Math.atan2(toCamera.y, toCamera.z);
       s.mesh.rotation.x = THREE.MathUtils.lerp(pitchRad - phi, Math.PI / 2 - phi, standing);
       const sc = toCamera.length() / distance;
@@ -1027,23 +1070,41 @@ export async function createShelfScene({ canvas, covers, onHover, onSelect, onSt
       if (!compact) tweenShowcase(1, { instant: true }); // a deep link lands in the showcase end state
     }
   }
-  // The label under a hovered / focused sleeve of the row: where it goes, in viewport px
-  const labelPos = new THREE.Vector3();
-  let labelOn = false;
-  function updateLabel() {
+  // The captions under the sleeves of the row: for each one, where its sleeve stands (top edge and size, viewport px) while
+  // the row is shown. A hover lift is taken out so the caption stays put. Off while a record is picked or the row spreads.
+  const capPos = new THREE.Vector3();
+  const capEdge = new THREE.Vector3();
+  const capRight = new THREE.Vector3();
+  const lerp = THREE.MathUtils.lerp;
+  const capOn = sleeves.map(() => false);
+  function updateLabels() {
     if (!onLabel) return;
-    const i = state === "stack" && !current && active >= 0 && rowK[active].v > 0.9 ? active : -1;
-    if (i >= 0) {
-      camera.updateMatrixWorld();
-      const sl = sleeves[i];
-      sl.mesh.getWorldPosition(labelPos).project(camera);
-      const halfHeight = scalePx * camera.zoom * sl.mesh.scale.x; // a facing sleeve is 2 units tall
-      onLabel(i, ((labelPos.x + 1) / 2) * viewW, ((1 - labelPos.y) / 2) * viewH + halfHeight + ROW.labelGap);
-      labelOn = true;
-    } else if (labelOn) {
-      onLabel(-1);
-      labelOn = false;
-    }
+    const browsing = state === "stack" && !current && !rowHidden && rowOut.v < 0.5;
+    sleeves.forEach((sl, i) => {
+      const on = browsing && rowK[i].v > 0.9;
+      if (!on) {
+        if (capOn[i]) {
+          capOn[i] = false;
+          onLabel(i, null);
+        }
+        return;
+      }
+      // Where the sleeve stands at rest (without its hover lift and the move towards the camera that comes with it), and how wide it looks there
+      capPos.copy(sl.mesh.position);
+      capPos.y -= sl.state.lift * lerp(K.LIFT_Y, ROW.hoverLiftY, sl.standing);
+      capPos.z -= sl.state.lift * lerp(K.LIFT_Z, ROW.hoverLiftZ, sl.standing);
+      sl.mesh.parent.localToWorld(capPos);
+      shiftCameraBy(rowCamera, sl.camX, sl.camY); // the camera that draws this sleeve
+      rowCamera.updateMatrixWorld();
+      capRight.setFromMatrixColumn(rowCamera.matrixWorld, 0);
+      capEdge.copy(capPos).addScaledVector(capRight, sl.mesh.scale.x); // a facing sleeve is 2 units wide
+      capPos.project(rowCamera);
+      capEdge.project(rowCamera);
+      const half = ((capEdge.x - capPos.x) / 2) * viewW;
+      const centreY = ((1 - capPos.y) / 2) * viewH;
+      capOn[i] = true;
+      onLabel(i, { x: ((capPos.x + 1) / 2) * viewW, top: centreY - half, size: half * 2, lift: ROW.hoverLiftY * half });
+    });
   }
 
   // ---- Render loop (runs only while the canvas is on screen and the tab is visible) ----
@@ -1060,7 +1121,7 @@ export async function createShelfScene({ canvas, covers, onHover, onSelect, onSt
 
     const floatAmount = reduceMotion ? 0 : current ? current.p.bob : 1;
     placeSleeves(t, floatAmount);
-    updateLabel();
+    updateLabels();
     if (current && !reduceMotion && current.p.spin > 0.001) current.record.spin(dt, current.p.spin);
 
     // The scene is drawn in up to three passes, each with the camera that suits what it shows:
@@ -1332,6 +1393,8 @@ export async function createShelfScene({ canvas, covers, onHover, onSelect, onSt
     skip,
     jumpTo,
     prewarm, // build the records, compile the shaders and upload the textures before a sleeve is clicked
+    relayout: layout, // measure the section again (its height changed)
+    fadeRow, // fade the row out / in without leaving the stack state (the list mode)
     enterRow, // spread the sleeves out from the pile (the canvas just became visible)
     resetRow, // back to the pile (the canvas just went away)
     expand, // the group of remaining sleeves spreads out (e.g. a sleeve button got keyboard focus)

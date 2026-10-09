@@ -41,3 +41,12 @@ export function renderCvButton(site) {
 // Optional photo for an About tile (public/about/tile-<n>.jpg). No file, no markup (so no 404).
 export const renderTilePhoto = (n, exists) =>
   exists ? `<img class="about-photo" src="/about/tile-${n}.jpg" alt="" decoding="async">` : "";
+
+// The small row at the bottom of the hero: location on the left, status on the right (an empty value is left out)
+export function renderHeroFoot(site) {
+  const items = [
+    site.heroLocation ? `<span>${escapeHtml(site.heroLocation)}</span>` : "",
+    site.heroStatus ? `<span class="hero-foot-end">${escapeHtml(site.heroStatus)}</span>` : "",
+  ].filter(Boolean);
+  return items.length ? `<p class="label hero-foot">${items.join("")}</p>` : "";
+}

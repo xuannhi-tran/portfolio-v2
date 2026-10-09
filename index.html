@@ -18,6 +18,11 @@
     <link rel="stylesheet" href="/src/style.css" />
   </head>
   <body>
+    <!-- Page background: groove rings (fixed, moves slowly with the scroll) and, over everything, a film grain.
+         The glows are in style.css (behind the hero title and the Projects row). See the --bg-* variables. -->
+    <div class="bg" aria-hidden="true"><div class="bg-rings" data-bg-rings></div></div>
+    <div class="bg-grain" aria-hidden="true"></div>
+
     <nav class="nav label" aria-label="Main">
       <div class="nav-inner">
         <a class="wordmark" href="#/">Nhi Tran</a>
@@ -30,7 +35,7 @@
     </nav>
 
     <main>
-      <section class="cover" id="cover" data-view="home" aria-labelledby="name">
+      <section class="cover" id="cover" aria-labelledby="name">
         <div class="hero-record" aria-hidden="true" data-hero-record>
           <div class="hero-disc">
             <span class="hero-label"><small>Nhi Tran · 2026</small></span>
@@ -38,7 +43,6 @@
         </div>
 
         <div class="hero-copy" data-hero-copy>
-          <p class="label">Portfolio — Side A</p>
           <h1 id="name" tabindex="-1"><span>Vo Xuan</span> <span>Nhi Tran</span></h1>
           <p class="label hero-meta">
             <span class="hero-meta-group"
@@ -61,13 +65,15 @@
             </ul>
           </div>
         </div>
+        <!-- site-hero-foot -->
       </section>
 
       <section
         class="shelf"
         id="shelf"
-        data-view="home"
+       
         data-state="stack"
+        data-mode="records"
         aria-labelledby="shelf-title"
       >
         <div class="shelf-top">
@@ -75,12 +81,18 @@
             ← All records
           </button>
         </div>
-        <h2 id="shelf-title" tabindex="-1">Projects</h2>
+        <header class="section-head">
+          <h2 class="section-title" id="shelf-title" tabindex="-1">Projects</h2>
+        </header>
         <div class="shelf-sub">
           <p class="label shelf-label">Pick a record</p>
-          <a class="list-link label" href="#/list">View as list</a>
+          <div class="mode-toggle" role="group" aria-label="View">
+            <button type="button" class="label mode-btn" data-mode="records" aria-pressed="true">Records</button>
+            <button type="button" class="label mode-btn" data-mode="list" aria-pressed="false">List</button>
+          </div>
         </div>
 
+        <div class="shelf-body" data-shelf-body>
         <div class="shelf-layout">
           <div class="tracklist">
             <!-- project-tracks -->
@@ -89,6 +101,12 @@
             <canvas class="scene" id="scene" aria-hidden="true" hidden></canvas>
             <!-- project-covers -->
           </div>
+        </div>
+        <div class="shelf-list" data-shelf-list hidden>
+          <ul class="rows">
+            <!-- project-cards -->
+          </ul>
+        </div>
         </div>
 
         <div class="info" id="info">
@@ -179,25 +197,14 @@
       </section>
 
       <section
-        class="projects"
-        id="projects"
-        data-view="list"
-        aria-labelledby="projects-title"
-      >
-        <h2 id="projects-title">Projects</h2>
-
-        <ul class="cards">
-          <!-- project-cards -->
-        </ul>
-      </section>
-
-      <section
         class="page-section about"
         id="about"
-        data-view="home"
+       
         aria-labelledby="about-title"
       >
-        <h2 class="sr-only" id="about-title" tabindex="-1">About</h2>
+        <header class="section-head">
+          <h2 class="section-title" id="about-title" tabindex="-1">About</h2>
+        </header>
         <div class="about-stage" data-about-stage>
           <div class="about-record" aria-hidden="true" data-about-record>
             <div class="about-disc" data-about-disc>
@@ -207,9 +214,6 @@
             </div>
           </div>
           <div class="about-sleeve" data-about-sleeve>
-            <p class="label about-caption" aria-hidden="true">
-              <span>Side B · Liner notes</span><span>About</span>
-            </p>
             <div class="about-grid">
               <section
                 class="about-tile about-tile--hello"
@@ -545,10 +549,12 @@
       <section
         class="page-section contact"
         id="contact"
-        data-view="home"
+       
         aria-labelledby="contact-title"
       >
-        <h2 id="contact-title" tabindex="-1">Contact</h2>
+        <header class="section-head">
+          <h2 class="section-title" id="contact-title" tabindex="-1">Contact</h2>
+        </header>
         <ul class="links label">
           <!-- site-links-contact -->
         </ul>
