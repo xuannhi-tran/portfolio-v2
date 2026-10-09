@@ -49,6 +49,8 @@ let active = -1; // hovered / focused item
 let picked = -1; // the record that is playing (or on its way)
 let uiState = "stack";
 let lastAction = "pick"; // "pick" | "swap" | "eject": decides where focus goes afterwards
+let navClosing = false; // a nav link is closing the record: no history entry, no snap back to the row, no focus return
+let closeWaiters = []; // resolved when the row is back
 let scene = null;
 let creating = false; // the scene is being built
 let transitionStart = 0;
@@ -149,6 +151,10 @@ const panelWidth = () => Math.min(PANEL.maxWidth, document.documentElement.clien
 // It is laid out at its final size; the scene's showcase progress only drives its transform
 // (it grows from its right edge) and opacity.
 let frameAspect = SHOWCASE.frame.aspect;
+let pageScrolling = false; // a scroll is under way (the pick scrolls the scene into place)
+window.addEventListener("scroll", () => (pageScrolling = true), { passive: true });
+window.addEventListener("scrollend", () => (pageScrolling = false));
+
 function placeFrame() {
   if (!demoFrame || compactQuery.matches || liveExpanded) return;
   const F = SHOWCASE.frame;
@@ -158,23 +164,36 @@ function placeFrame() {
   const slot = Math.max(0, Math.min(viewport * F.widthFraction, right - left));
   const chrome = (demoBar?.offsetHeight || 32) + 2; // title bar + the frame's border
   const maxHeight = window.innerHeight * F.maxHeight;
+
+  // Everything below is measured in the section's own coordinates (an element's top minus the section's top), so it
+  // does not depend on where the page is scrolled right now: a pick scrolls the scene into place while it plays.
   const shelfRect = shelf.getBoundingClientRect();
   const crateRect = crate.getBoundingClientRect();
-
-  // Top edge level with the info panel's first line (measured now, so it follows resizes). Never above the
-  // "Back to cover / All records" row. The bottom stays F.bottomGap clear of the "Now playing" line.
-  const panelTop = (panels[picked] && !panels[picked].hidden ? panels[picked].querySelector(".panel-side") : null)?.getBoundingClientRect().top
-    ?? info.getBoundingClientRect().top + 4;
-  const rowBottom = document.querySelector(".shelf-top")?.getBoundingClientRect().bottom ?? 0;
-  const statusTop = status?.getBoundingClientRect().top ?? Infinity;
+  const inShelf = (el) => el.getBoundingClientRect().top - shelfRect.top;
+  const crateTop = crateRect.top - shelfRect.top;
+  // The first line of the info panel (the panel sits where placePanel() puts it: level with the crate)
+  const panelTop = crateTop + (parseFloat(getComputedStyle(panels[0] ?? info).paddingTop) || 0);
+  // The "All records" row is sticky, so its place depends on the scroll. Once the scene is in place the crate is
+  // centred on screen: the section's top is then at finalTop, and the row sits at its sticky offset or its own place.
+  const rowEl = document.querySelector(".shelf-top");
+  const margin = parseFloat(getComputedStyle(crate).scrollMarginTop) || 0; // scrollIntoView centres the crate plus its scroll margin
+  const pageY = shelfRect.top + window.scrollY; // the section's top, in the page
+  const wanted = pageY + crateTop - margin + (crateRect.height + margin) / 2 - window.innerHeight / 2; // scroll position that centres it
+  const maxScroll = Math.max(0, document.documentElement.scrollHeight - window.innerHeight);
+  // where the section's top is, or (while the page is still scrolling into place) will be, on screen
+  const finalTop = pageScrolling ? pageY - Math.min(Math.max(wanted, 0), maxScroll) : shelfRect.top;
+  const stuckBottom = (parseFloat(getComputedStyle(rowEl).top) || 0) + rowEl.offsetHeight; // screen px
+  const naturalBottom = (parseFloat(getComputedStyle(shelf).paddingTop) || 0) + rowEl.offsetHeight; // section px
+  const rowBottom = Math.max(naturalBottom, stuckBottom - finalTop);
+  const statusTop = status ? inShelf(status) : Infinity;
   const alignedTop = Math.max(panelTop, rowBottom + F.rowGap);
   const room = Math.min(maxHeight, statusTop - F.bottomGap - alignedTop);
 
   let width = slot;
   let height = width / frameAspect + chrome;
-  let topViewport = alignedTop;
+  let top = alignedTop;
   if (room >= (slot / frameAspect + chrome) * F.minFit || room >= height) {
-    // Aligned with the panel; shrink the width rather than overflow
+    // Level with the panel; shrink the width rather than overflow
     if (height > room) {
       height = room;
       width = (height - chrome) * frameAspect;
@@ -186,9 +205,8 @@ function placeFrame() {
       width = (height - chrome) * frameAspect;
     }
     const reference = Math.min(slot / F.aspect + chrome, maxHeight);
-    topViewport = crateRect.top + F.top + Math.max(0, (reference - height) / 2);
+    top = crateTop + F.top + Math.max(0, (reference - height) / 2);
   }
-  const top = topViewport - shelfRect.top;
   demoFrame.style.left = `${left + (right - left - width) / 2 - shelfRect.left}px`;
   demoFrame.style.top = `${top}px`;
   demoFrame.style.width = `${width}px`;
@@ -603,11 +621,39 @@ function showLabel(i, x, y) {
 // ---- Scroll lock -------------------------------------------------------------------
 // While a record is picked or playing the page does not scroll (the scene is in the viewport and stays there).
 // A pick first scrolls the scene into place; the lock follows once that is done.
+// Wide screens: the page does not scroll at all (everything fits). Narrow screens: the panel is taller than the
+// screen and must be scrollable, but only within the Projects section, so the page above and below is taken out of the
+// flow (display: none) while a record is open: there is nothing to scroll into, no scroll chaining and no scroll
+// handlers to fight with. The scroll position is moved by the height that disappears, in the same task, so nothing
+// jumps; it is moved back when the record is closed.
+let soloShift = 0;
+function enterSolo() {
+  if (htmlElement.classList.contains("shelf-solo")) return;
+  const y = window.scrollY; // read before the page gets shorter (the browser would clamp it)
+  const before = shelf.getBoundingClientRect().top + y;
+  htmlElement.classList.add("shelf-solo");
+  const after = shelf.getBoundingClientRect().top + window.scrollY; // forces the layout
+  soloShift = before - after;
+  // The panel only joins the page once it has faded in, so for now the section may be too short to scroll to where the
+  // scene is (the crate near the top of the screen): hold that much room until the record is closed
+  const target = Math.max(0, y - soloShift);
+  shelf.style.minHeight = `${Math.max(shelf.offsetHeight, target + window.innerHeight)}px`;
+  window.scrollTo({ top: target, behavior: "instant" });
+}
+function exitSolo() {
+  if (!htmlElement.classList.contains("shelf-solo")) return;
+  htmlElement.classList.remove("shelf-solo");
+  shelf.style.minHeight = "";
+  window.scrollTo({ top: window.scrollY + soloShift, behavior: "instant" });
+  soloShift = 0;
+}
 function lockScroll() {
-  htmlElement.classList.add("shelf-locked");
+  if (compactQuery.matches) enterSolo();
+  else htmlElement.classList.add("shelf-locked");
 }
 function unlockScroll() {
   htmlElement.classList.remove("shelf-locked");
+  exitSolo();
 }
 function lockWhenAligned() {
   if (routing || reducedMotion()) {
@@ -623,9 +669,14 @@ function lockWhenAligned() {
   const lock = () => {
     window.removeEventListener("scrollend", lock);
     clearTimeout(timer);
-    if (uiState !== "stack") lockScroll();
+    pageScrolling = false;
+    if (uiState !== "stack") {
+      lockScroll();
+      placePanel();
+      placeFrame();
+    }
   };
-  const timer = setTimeout(lock, 900);
+  const timer = setTimeout(lock, 1600); // a smooth scroll normally ends with `scrollend`; this is only a fallback
   window.addEventListener("scrollend", lock, { once: true });
 }
 
@@ -689,7 +740,7 @@ function onStateChange(next, index) {
   if (next === "transitioning") {
     transitionStart = performance.now();
     active = -1;
-    if (!routing) {
+    if (!routing && !navClosing) {
       // The URL follows what the user does (picking, swapping and ejecting add history entries)
       const target = hashFor(lastAction === "eject" ? -1 : index);
       if (location.hash !== target) history.pushState(null, "", target);
@@ -711,17 +762,52 @@ function onStateChange(next, index) {
   if (next === "playing") picked = index;
   if (next === "stack") picked = -1;
   render(); // first, so the controls are visible and can take focus
-  if (next === "stack") unlockScroll(); // back in the row: the page scrolls again
+  if (next === "stack") {
+    unlockScroll(); // back in the row: the page scrolls again
+    // Settle with the heading and the row in view (the pick scrolled the scene into place, narrow screens also moved the page)
+    if (!routing && !navClosing && previous !== "stack") {
+      shelf.scrollIntoView({ block: "start", behavior: reducedMotion() ? "auto" : "smooth" });
+    }
+    const waiters = closeWaiters;
+    closeWaiters = [];
+    navClosing = false;
+    waiters.forEach((resolve) => resolve());
+  }
 
   if (next === "playing") {
     placePanel();
     if (lastAction === "swap" && !routing) focusNextPlayable(index);
     else panels[index]?.querySelector(".panel-title")?.focus({ preventScroll: true }); // the panel just opened
   }
-  if (next === "stack" && !routing && (document.activeElement.closest?.(".panel") || document.activeElement === ejectButton || document.activeElement === document.body)) {
+  if (next === "stack" && !routing && !navClosing && (document.activeElement.closest?.(".panel") || document.activeElement === ejectButton || document.activeElement === document.body)) {
     // Back where we started: return keyboard focus to the record that was picked
     tracks[wasPicked]?.focus({ preventScroll: true });
   }
+}
+
+export const isRecordOpen = () => !!scene && uiState !== "stack";
+
+// Closes the open record with the same reverse timeline as "All records" (a nav link does this before it scrolls).
+// Resolves once the row is back and the page is unlocked; nothing else is left to do when it does.
+export function closeRecord() {
+  return new Promise((resolve) => {
+    if (!scene || uiState === "stack") {
+      resolve();
+      return;
+    }
+    navClosing = true;
+    closeWaiters.push(resolve);
+    setTimeout(() => {
+      // never leave a link hanging if something goes wrong
+      if (closeWaiters.includes(resolve)) {
+        closeWaiters = closeWaiters.filter((r) => r !== resolve);
+        navClosing = false;
+        resolve();
+      }
+    }, 8000);
+    if (uiState === "transitioning") scene.skip(); // finish the move first (a pick goes to playing, an eject to the row)
+    if (uiState === "playing") requestEject();
+  });
 }
 
 export function initShelf() {
@@ -730,6 +816,10 @@ export function initShelf() {
   tracks.forEach((track, i) => wireItem(track, i));
   ejectButton?.addEventListener("click", requestEject);
   compactQuery.addEventListener("change", () => {
+    if (uiState !== "stack") {
+      unlockScroll();
+      lockScroll();
+    }
     render();
     placePanel();
     if (compactQuery.matches) {
@@ -746,6 +836,17 @@ export function initShelf() {
   setUpDemo();
   setUpLive();
   setUpActivation();
+  new ResizeObserver(() => {
+    placePanel();
+    placeFrame();
+  }).observe(shelf);
+  // The pick scrolls the scene into place while it plays: once that is done, measure everything again
+  window.addEventListener("scrollend", () => {
+    pageScrolling = false;
+    if (uiState === "stack") return;
+    placePanel();
+    placeFrame();
+  });
 
   labelEl = document.createElement("p");
   labelEl.className = "label sleeve-label";

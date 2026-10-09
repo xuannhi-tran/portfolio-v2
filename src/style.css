@@ -855,8 +855,17 @@ h2 {
   display: none !important;
 }
 
-.nav a[aria-current="page"] {
+/* The nav link of the section in view */
+.nav a[aria-current="true"] {
   color: var(--text);
+  text-decoration: underline;
+  text-underline-offset: 0.5em;
+  text-decoration-thickness: 1px;
+}
+
+/* Headings that take focus after a nav scroll (tabindex="-1"): no ring, they are not controls */
+[tabindex="-1"]:focus {
+  outline: none;
 }
 
 /* Record shelf: the Projects section of the landing page */
@@ -1554,6 +1563,17 @@ h2 {
 
 html {
   scrollbar-gutter: stable;
+}
+
+/* Narrow screens, a record open: only the Projects section is on the page (see enterSolo in src/shelf.js) */
+html.shelf-solo #cover,
+html.shelf-solo #about,
+html.shelf-solo #contact {
+  display: none;
+}
+
+html.shelf-solo {
+  overscroll-behavior-y: contain; /* no scroll chaining or pull-to-refresh at the ends of the section */
 }
 
 html.demo-live,
