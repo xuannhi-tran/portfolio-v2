@@ -61,36 +61,32 @@
             </ul>
           </div>
         </div>
-
-        <nav class="hero-tracks" aria-label="Projects">
-          <ul class="links label">
-            <!-- hero-tracks -->
-          </ul>
-        </nav>
       </section>
 
       <section
         class="shelf"
         id="shelf"
-        data-view="shelf"
+        data-view="home"
         data-state="stack"
         aria-labelledby="shelf-title"
       >
         <div class="shelf-top">
-          <a class="button back" href="#/">← Back to cover</a>
           <button type="button" class="button back" id="eject" hidden>
             ← All records
           </button>
         </div>
         <h2 id="shelf-title">Projects</h2>
-        <p class="label shelf-label">Pick a record</p>
+        <div class="shelf-sub">
+          <p class="label shelf-label">Pick a record</p>
+          <a class="list-link label" href="#/list">View as list</a>
+        </div>
 
         <div class="shelf-layout">
           <div class="tracklist">
             <!-- project-tracks -->
           </div>
           <div class="crate">
-            <canvas class="scene" id="scene" aria-hidden="true"></canvas>
+            <canvas class="scene" id="scene" aria-hidden="true" hidden></canvas>
             <!-- project-covers -->
           </div>
         </div>
@@ -180,7 +176,6 @@
         <p class="label demo-note" id="demo-note" hidden></p>
 
         <p class="label shelf-status" id="shelf-status" aria-live="polite"></p>
-        <a class="list-link label" href="#/list">View as list</a>
       </section>
 
       <section

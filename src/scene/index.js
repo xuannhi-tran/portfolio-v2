@@ -11,22 +11,24 @@ import {
   PLATTER_CENTER,
   PLATTER_RADIUS,
 } from "./turntable.js";
-import { createRecord, RECORD_RADIUS } from "./record.js";
+import { createRecord, createGrooveTexture, RECORD_RADIUS } from "./record.js";
 import { createPickProgress, createPickTimeline } from "./pick.js";
 import * as K from "./tweaks.js"; // all the tweakable numbers live in tweaks.js
 
-// The projects screen as one three.js scene: the sleeve stack and the turntable, one renderer.
-// States: "stack" -> "transitioning" -> "playing" (and from "playing" a swap goes through
-// "transitioning" back to "playing"). In the playing layout the played sleeve has left the
-// stack, the other sleeves stay on the left, the turntable is in the middle.
+// The Projects section as one three.js scene: the row of sleeves and the turntable, one renderer.
+// States: "stack" (browsing: the sleeves lie in a row, see ROW in tweaks.js) -> "transitioning" -> "playing"
+// (and from "playing" a swap goes through "transitioning" back to "playing"). In the playing layout the
+// played sleeve has left the row, the other sleeves stay on the left, the turntable is in the middle.
 //
 // `covers` is [{ template, color, title, side, year }] in project order.
 // Callbacks: onHover(index | -1), onSelect(index) from the pointer,
 // onStateChange(state, index) whenever the state changes, and onPanel(index, amount 0..1)
 // while the info panel of that record should fade in / out (it is part of the timeline), and
-// onShowcase(progress 0..1) while the showcase layout (see SHOWCASE in tweaks.js) moves.
-export async function createShelfScene({ canvas, covers, onHover, onSelect, onStateChange, onPanel, onShowcase }) {
+// onShowcase(progress 0..1) while the showcase layout (see SHOWCASE in tweaks.js) moves, and onLabel(index, x, y)
+// each frame while a sleeve of the row is hovered / focused (x, y = where its label goes, in viewport px; index -1 = none).
+export async function createShelfScene({ canvas, covers, onHover, onSelect, onStateChange, onPanel, onShowcase, onLabel }) {
   const reduceMotion = matchMedia("(prefers-reduced-motion: reduce)").matches;
+  const devTools = import.meta.env.DEV && new URLSearchParams(location.search).has("dev"); // the scrub sliders: dev server with ?dev=1 only
   const compactQuery = matchMedia(K.COMPACT.query);
   let compact = compactQuery.matches;
 
@@ -48,7 +50,9 @@ export async function createShelfScene({ canvas, covers, onHover, onSelect, onSt
   // While the record travels it is drawn by a third camera, blended between the two by the
   // record's arc progress, so its perspective changes continuously instead of switching.
   const recordCamera = new THREE.PerspectiveCamera(K.FOV, 1, 0.5, 80);
-
+  // Sleeves in the row are drawn one at a time, each by this camera moved sideways to sit right in front of
+  // that sleeve (and lens-shifted back), so every sleeve is seen straight on, with no perspective skew.
+  const rowCamera = new THREE.PerspectiveCamera(K.FOV, 1, 0.5, 80);
   // Reflections and lights
   const pmrem = new THREE.PMREMGenerator(renderer);
   const roomScene = new RoomEnvironment();
@@ -84,6 +88,21 @@ export async function createShelfScene({ canvas, covers, onHover, onSelect, onSt
   turntable.position.copy(tablePos);
   turntable.scale.setScalar(RIG_SCALE);
   scene.add(turntable);
+  // The turntable fades in while the sleeves move (p.table)
+  const tableMaterials = [];
+  turntable.traverse((o) => {
+    if (o.material) [].concat(o.material).forEach((m) => tableMaterials.push(m));
+  });
+  let tableAmount = 1;
+  function setTableAmount(a) {
+    a = Math.round(THREE.MathUtils.clamp(a, 0, 1) * 100) / 100;
+    if (a === tableAmount) return;
+    tableAmount = a;
+    for (const m of tableMaterials) {
+      m.transparent = a < 1;
+      m.opacity = a;
+    }
+  }
   const hoverWorld = new THREE.Vector3();
   const seatedWorld = new THREE.Vector3();
   const rigQuat = new THREE.Quaternion();
@@ -117,6 +136,24 @@ export async function createShelfScene({ canvas, covers, onHover, onSelect, onSt
     root.add(sleeve.mesh);
     return sleeve;
   });
+
+  // ---- The row ---------------------------------------------------------------
+  // rowK[i].v: 0 = sleeve i is in the pile (the collapsed stack's positions), 1 = in its place in the row.
+  // enterRow() spreads them out once, staggered; resetRow() puts the pile back (while the canvas is hidden).
+  const rowK = covers.map(() => ({ v: 0 }));
+  const rowOut = { v: 0 }; // browsing: 1 = the row is faded out (sunk by ROW.fadeDrift), 0 = shown
+  function enterRow({ instant = false } = {}) {
+    gsap.killTweensOf(rowK);
+    if (instant || reduceMotion) {
+      rowK.forEach((r) => (r.v = 1));
+      return;
+    }
+    rowK.forEach((r, i) => gsap.to(r, { v: 1, duration: ROW.duration, ease: ROW.ease, delay: i * ROW.stagger }));
+  }
+  function resetRow() {
+    gsap.killTweensOf(rowK);
+    rowK.forEach((r) => (r.v = 0));
+  }
 
   // ---- State ---------------------------------------------------------------
   let state = "stack";
@@ -198,6 +235,7 @@ export async function createShelfScene({ canvas, covers, onHover, onSelect, onSt
   // corner (a lens shift, see placeTableCamera). The demo frame in the page follows `onShowcase`.
   // Eject and swap play it backwards first, then run their own timelines untouched.
   const SH = K.SHOWCASE;
+  const ROW = K.ROW;
   const showcaseK = { v: 0 };
   let showcaseTween = null;
   let exiting = false; // the showcase is playing backwards before an eject / swap starts
@@ -271,9 +309,10 @@ export async function createShelfScene({ canvas, covers, onHover, onSelect, onSt
   // in its column ("stack layout"), or at the left for the "playing layout". The canvas is a
   // full-viewport layer behind the page; the crate is only a placeholder for the stack's column.
   const crate = canvas.parentElement;
+  const shelfEl = canvas.closest(".shelf") ?? crate; // the Projects section
   const camPos = new THREE.Vector3();
   const camTarget = new THREE.Vector3();
-  const layoutStack = { x: 0, y: 0 }; // px: where the stack's centre line is on screen
+  const layoutStack = { x: 0, y: 0, zoom: 1 }; // px: where the row's centre is on screen (the browsing layout), and its zoom
   const layoutPlay = { x: 0, y: 0, zoom: 1 };
   let viewW = 1;
   let viewH = 1;
@@ -284,7 +323,7 @@ export async function createShelfScene({ canvas, covers, onHover, onSelect, onSt
   const cameraAmount = () => (viewLock ? 1 : current ? current.p.camera : 0);
 
   function applyCamera(e = cameraAmount()) {
-    camera.zoom = THREE.MathUtils.lerp(1, layoutPlay.zoom, e);
+    camera.zoom = THREE.MathUtils.lerp(layoutStack.zoom, layoutPlay.zoom, e);
     const x = THREE.MathUtils.lerp(layoutStack.x, layoutPlay.x, e);
     const y = THREE.MathUtils.lerp(layoutStack.y, layoutPlay.y, e);
     camera.setViewOffset(viewW, viewH, viewW / 2 - x, viewH / 2 - y, viewW, viewH);
@@ -331,20 +370,79 @@ export async function createShelfScene({ canvas, covers, onHover, onSelect, onSt
   // turntable, and lens-shifted back so that things at that distance land on screen
   // exactly where the stack camera puts them. amount 0 = the stack camera, 1 = the turntable camera.
   function shiftCamera(cam, amount) {
-    const dx = tablePos.x * amount;
+    shiftCameraBy(cam, tablePos.x * amount);
+  }
+  // The same, by distances in world units (dy: up). The view stays pitched the same, and the lens shift puts what
+  // is in front of the camera where the stack camera puts it.
+  function shiftCameraBy(cam, dx, dy = 0, view = camView, zoom = camera.zoom) {
     cam.fov = camera.fov;
     cam.aspect = camera.aspect;
-    cam.zoom = camera.zoom;
-    cam.position.copy(camPos).x += dx;
-    cam.lookAt(camTarget.x + dx, camTarget.y, camTarget.z);
-    cam.setViewOffset(viewW, viewH, viewW / 2 - (camView.x + dx * scalePx * camera.zoom), viewH / 2 - camView.y, viewW, viewH);
+    cam.zoom = zoom;
+    cam.position.copy(camPos);
+    cam.position.x += dx;
+    cam.position.y += dy;
+    cam.lookAt(camTarget.x + dx, camTarget.y + dy, camTarget.z);
+    const k = scalePx * zoom;
+    cam.setViewOffset(
+      viewW,
+      viewH,
+      viewW / 2 - (view.x + dx * k),
+      viewH / 2 - (view.y - dy * k * Math.cos(THREE.MathUtils.degToRad(K.STACK_CAMERA.pitch))),
+      viewW,
+      viewH,
+    );
+  }
+
+  // `out` becomes a camera part of the way (e: 0..1) from `a` to `b`: position, rotation, zoom and lens shift
+  const startCamera = new THREE.PerspectiveCamera(K.FOV, 1, 0.5, 80);
+  function blendCameras(out, a, b, e) {
+    out.fov = THREE.MathUtils.lerp(a.fov, b.fov, e);
+    out.aspect = a.aspect;
+    out.zoom = THREE.MathUtils.lerp(a.zoom, b.zoom, e);
+    out.position.lerpVectors(a.position, b.position, e);
+    out.quaternion.slerpQuaternions(a.quaternion, b.quaternion, e);
+    out.setViewOffset(
+      viewW,
+      viewH,
+      THREE.MathUtils.lerp(a.view.offsetX, b.view.offsetX, e),
+      THREE.MathUtils.lerp(a.view.offsetY, b.view.offsetY, e),
+      viewW,
+      viewH,
+    );
   }
 
   // Where things sit on screen (the crate scrolls with the page, the canvas does not)
+  let lastClip = "";
   function placeLayouts() {
     const rect = crate.getBoundingClientRect();
-    layoutStack.x = rect.left + rect.width / 2;
-    layoutStack.y = rect.top + rect.height / 2;
+    const crateY = rect.top + rect.height / 2;
+
+    // The canvas only shows within the Projects section, so the sleeves never draw over the hero or About
+    const section = shelfEl.getBoundingClientRect();
+    const clip = `inset(${Math.max(0, Math.round(section.top))}px 0 ${Math.max(0, Math.round(viewH - section.bottom))}px 0)`;
+    if (clip !== lastClip) {
+      canvas.style.clipPath = clip;
+      lastClip = clip;
+    }
+
+    // Browsing layout: the row (or the 2 x 2 grid on narrow screens), a fixed gap below the heading and its label
+    layoutStack.x = viewW / 2;
+    const cols = compact ? Math.min(2, n) : n;
+    const rows = Math.ceil(n / cols);
+    const step = compact ? ROW.stepCompact : ROW.stepX;
+    const worldW = (cols - 1) * step + 2;
+    const worldH = (rows - 1) * step + 2;
+    const px = Math.min((viewW * ROW.fillWidth) / worldW, (viewH * ROW.fillHeight) / worldH, ROW.maxSleevePx / 2);
+    layoutStack.zoom = px / scalePx;
+    const labelEl = shelfEl.querySelector(".shelf-label");
+    const headBottom = labelEl ? labelEl.getBoundingClientRect().bottom : section.top + 140;
+    const areaTop = headBottom + ROW.gapBelowHeading;
+    const areaBottom = Math.min(section.bottom, viewH) - ROW.bottomMargin; // the visible part of the section
+    layoutStack.y = Math.max(areaTop + (worldH * px) / 2, (areaTop + areaBottom) / 2); // centred in that space, never above it
+    sleeves.forEach((sl, i) => {
+      sl.rowX = ((i % cols) - (cols - 1) / 2) * step;
+      sl.rowY = ((rows - 1) / 2 - Math.floor(i / cols)) * step + ROW.offsetY;
+    });
 
     let scale1;
     if (!compact) {
@@ -352,7 +450,7 @@ export async function createShelfScene({ canvas, covers, onHover, onSelect, onSt
       const tableX = viewW * K.PLAYING_LAYOUT.tableX;
       scale1 = (tableX - stackX) / tablePos.x;
       layoutPlay.x = stackX;
-      layoutPlay.y = layoutStack.y + K.PLAYING_LAYOUT.offsetY;
+      layoutPlay.y = crateY + K.PLAYING_LAYOUT.offsetY;
     } else {
       // Turntable fills the top of the column; the stack ends up off screen to the left
       scale1 = (K.COMPACT.tableFit * rect.width) / (TURNTABLE_WIDTH * RIG_SCALE);
@@ -420,45 +518,96 @@ export async function createShelfScene({ canvas, covers, onHover, onSelect, onSt
   const toCamera = new THREE.Vector3();
   const sleeveAt = new THREE.Vector3();
 
+  // How a sleeve lying in the stack at height `y` is tipped and scaled (it faces the camera a little more the higher it is)
+  function stackPose(y) {
+    toCamera.copy(camPos).sub(sleeveAt.set(0, y, 0));
+    return { rotX: pitchRad - Math.atan2(toCamera.y, toCamera.z), scale: toCamera.length() / distance };
+  }
+
+  // The same for a sleeve standing in the row at height `y` (facing the camera)
+  function standPose(y) {
+    toCamera.copy(camPos).sub(sleeveAt.set(0, y, 0));
+    return { rotX: Math.PI / 2 - Math.atan2(toCamera.y, toCamera.z), scale: toCamera.length() / distance };
+  }
+
   // Positions every sleeve for the current moment: the stack, with the played sleeve sliding
   // away and fading while the others close up (and the reverse when it comes back).
   function placeSleeves(t, floatAmount) {
     const played = current ? current.index : -1;
-    const leave = current ? current.p.leave : 0;
-    const collapsed = collapseK.v * leave; // 0 = the spread-out layout, 1 = collapsed
-    const stackLift = SH.stackOffsetY * showcaseK.v * leave; // the showcase moves the left stack up, clear of the turntable
+    const p = current ? current.p : null;
+    const leave = p ? p.leave : 0;
+    const direct = p ? p.direct : 0; // 1 = picked from the row (blends to 0 while a swap takes it back to the stack)
+    const pin = p ? p.pin : 0;
+    const out = p ? p.out * (1 - pin) : 0; // the other sleeves faded out in the row
+    const stackIn = p ? Math.max(p.stack, pin) : 1; // the stack on the left faded in
+    const leaveEff = leave + (1 - leave) * direct; // how closed up the stack on the left is
+    const collapsed = collapseK.v * leaveEff; // 0 = the spread-out layout, 1 = collapsed
+    const stackLift = SH.stackOffsetY * showcaseK.v * leaveEff; // the showcase moves the left stack up, clear of the turntable
+    const pxToWorld = 1 / (scalePx * camera.zoom);
     root.position.y = Math.sin(t * 0.7) * K.BOB * floatAmount;
 
     sleeves.forEach((s, i) => {
-      let y = s.restY;
-      let x = 0;
+      let y;
+      let x;
       let z = 0;
       let opacity = 1;
-      if (played >= 0) {
-        if (i === played) {
-          x = -leave * K.LEAVE_OFFSET; // away from the turntable, towards the left stack
-          opacity = 1 - leave; // fully transparent when the leave step ends, before the record arcs
-        } else {
-          const rank = i < played ? i : i - 1;
-          const closedY = ((n - 2) / 2 - rank) * K.STEP_Y;
-          y = THREE.MathUtils.lerp(s.restY, closedY, leave);
-          if (collapsed > 0) {
-            const collapsedY = ((n - 2) / 2 - rank) * CS.stepY + CS.offsetY;
-            y = THREE.MathUtils.lerp(y, collapsedY, collapsed);
-            z = collapsed * rank * CS.stepZ;
-          }
-          y += stackLift;
+      let standing = 0; // 0 = lying like in the stack, 1 = standing in the row
+      if (played < 0) {
+        // Browsing: from the pile (the collapsed stack's positions) to the sleeve's place in the row, and faded
+        // out / sunk while the row comes back after an eject
+        const pileY = ((n - 1) / 2 - i) * CS.stepY + CS.offsetY;
+        const k = rowK[i].v;
+        x = THREE.MathUtils.lerp(0, s.rowX ?? 0, k);
+        y = THREE.MathUtils.lerp(pileY, s.rowY ?? 0, k) - ROW.fadeDrift * rowOut.v;
+        opacity = 1 - rowOut.v;
+        standing = k;
+      } else if (i === played) {
+        // The chosen sleeve. Picked from the row it stays where it stands (the record comes out of it), lifted a
+        // little, and fades out; in a swap it sits in the stack and leaves to the left
+        x = THREE.MathUtils.lerp(0, s.rowX ?? 0, direct) - leave * K.LEAVE_OFFSET * (1 - direct);
+        y = THREE.MathUtils.lerp(s.restY, (s.rowY ?? 0) + ROW.pickLift * out, direct);
+        opacity = 1 - leave;
+        standing = direct;
+      } else if (direct > 0 && stackIn <= 0) {
+        // Picked from the row: the others fade out where they stand, sinking a little (never moving sideways)
+        x = s.rowX ?? 0;
+        y = (s.rowY ?? 0) - ROW.fadeDrift * out;
+        opacity = 1 - out;
+        standing = 1;
+      } else {
+        // The stack on the left: the others close up (and collapse) around the gap. After a pick from the row it
+        // fades in, sliding in from the left.
+        const rank = i < played ? i : i - 1;
+        const closedY = ((n - 2) / 2 - rank) * K.STEP_Y;
+        y = THREE.MathUtils.lerp(s.restY, closedY, leaveEff);
+        if (collapsed > 0) {
+          const collapsedY = ((n - 2) / 2 - rank) * CS.stepY + CS.offsetY;
+          y = THREE.MathUtils.lerp(y, collapsedY, collapsed);
+          z = collapsed * rank * CS.stepZ;
         }
+        y += stackLift;
+        x = -(1 - stackIn) * ROW.stackSlidePx * pxToWorld * direct;
+        opacity = stackIn;
       }
 
       // Perspective makes the upper sleeves look flatter, wider and further apart than the
-      // lower ones, so tip and scale each one a little to even that out.
+      // lower ones, so tip and scale each one a little to even that out. In the row a sleeve
+      // stands up and faces the camera, and is thinner.
       toCamera.copy(camPos).sub(sleeveAt.set(0, y, 0));
-      s.mesh.rotation.x = pitchRad - Math.atan2(toCamera.y, toCamera.z);
-      s.mesh.scale.setScalar(toCamera.length() / distance);
+      const phi = Math.atan2(toCamera.y, toCamera.z);
+      s.mesh.rotation.x = THREE.MathUtils.lerp(pitchRad - phi, Math.PI / 2 - phi, standing);
+      const sc = toCamera.length() / distance;
+      s.mesh.scale.set(sc, sc * THREE.MathUtils.lerp(1, ROW.thin, standing), sc);
+      // A standing sleeve is drawn by a camera in front of it (it glides to the main camera as a sleeve of the pile
+      // stands up when the row spreads out)
+      s.standing = standing;
+      s.camX = x * standing;
+      s.camY = y * standing;
 
       const bob = Math.sin(t * 0.9 + i * 0.8) * 0.015 * floatAmount;
-      s.mesh.position.set(x, y + bob + s.state.lift * K.LIFT_Y, s.baseZ + z + s.state.lift * K.LIFT_Z);
+      const liftY = THREE.MathUtils.lerp(K.LIFT_Y, ROW.hoverLiftY, standing);
+      const liftZ = THREE.MathUtils.lerp(K.LIFT_Z, ROW.hoverLiftZ, standing);
+      s.mesh.position.set(x, y + bob + s.state.lift * liftY, s.baseZ + z + s.state.lift * liftZ);
       s.setLook(s.state.glow, s.state.dim);
       s.setOpacity(opacity);
     });
@@ -522,7 +671,7 @@ export async function createShelfScene({ canvas, covers, onHover, onSelect, onSt
       mesh.updateWorldMatrix(true, false);
       mesh.getWorldQuaternion(qSleeve);
       mesh.localToWorld(record.position.set(p.slide * K.SLIDE_OUT, 0, 0)); // follows the sleeve's hover / float...
-      record.position.x += p.leave * K.LEAVE_OFFSET; // ...but not its slide to the left: the record stays put
+      record.position.x += p.leave * K.LEAVE_OFFSET * (1 - p.direct); // ...but not its slide to the left (a swap): the record stays put
       record.quaternion.copy(qSleeve);
       record.scale.setScalar(RIG_SCALE * mesh.scale.x);
     } else {
@@ -546,6 +695,10 @@ export async function createShelfScene({ canvas, covers, onHover, onSelect, onSt
       }
     }
 
+    if (p.direct && !p.pin) {
+      showcaseK.v = compact ? 0 : p.camera; // the showcase camera cuts in with the playing layout (nothing else is on screen)
+      onShowcase?.(compact ? 0 : p.frame); // the demo frame follows later in the timeline
+    }
     applyReflections();
 
     turntable.setTonearm(p.needle);
@@ -558,8 +711,8 @@ export async function createShelfScene({ canvas, covers, onHover, onSelect, onSt
   function retire(c) {
     onPanel?.(c.index, 0);
     c.tl.kill();
-    scene.remove(c.record);
-    c.record.dispose(); // records are created per pick and thrown away afterwards
+    scene.remove(c.record); // the record goes back to the pool (see getRecord)
+    c.record.visible = false;
     if (current === c) current = null;
     sleeves.forEach((s) => {
       Object.assign(s.state, { lift: 0, glow: 0, dim: 0 });
@@ -578,9 +731,35 @@ export async function createShelfScene({ canvas, covers, onHover, onSelect, onSt
     turntable.setTonearm(0);
     tableShown = false;
     viewLock = false;
+    rowK.forEach((r) => (r.v = 1)); // back in the row
+    gsap.killTweensOf(rowOut);
+    rowOut.v = 0;
     applyCamera();
     setState("stack", c.index);
     applyHover();
+  }
+
+  // A record that came from a swap ends its reverse in the stack on the left: the stack (and the turntable) fade out,
+  // then the row fades back in, rising into place
+  function backToRow(c) {
+    if (reduceMotion) {
+      finishEject(c);
+      return;
+    }
+    c.back = gsap.to(c.p, {
+      stack: 0,
+      leave: 1,
+      table: 0,
+      duration: ROW.backFade,
+      ease: "power1.in",
+      onUpdate: update,
+      onComplete: () => {
+        c.back = null;
+        finishEject(c);
+        rowOut.v = 1;
+        gsap.to(rowOut, { v: 0, duration: ROW.backFade, ease: "power2.out" });
+      },
+    });
   }
 
   // Reduced motion: no travelling, just a short crossfade to the other state
@@ -595,25 +774,96 @@ export async function createShelfScene({ canvas, covers, onHover, onSelect, onSt
     });
   }
 
+  // ---- Records: made once, before they are needed ---------------------------------------
+  // Drawing the grooves and the label and uploading them to the GPU takes long enough to be felt as a stall, so
+  // the records are made (one per project) and their shaders compiled and textures uploaded when the Projects
+  // section is about to be reached (prewarm), not when a sleeve is clicked.
+  const records = [];
+  let grooveTexture = null;
+  function getRecord(i) {
+    if (!records[i]) {
+      const c = covers[i];
+      grooveTexture ??= createGrooveTexture();
+      const record = createRecord(
+        { title: c.title, side: c.side, year: c.year, cover: { color: c.color, ink: c.ink, label: c.label, labelInk: c.labelInk } },
+        { grooveTexture },
+      );
+      record.useEnvironment(envTexture, K.ENV_INTENSITY);
+      record.visible = false;
+      records[i] = record;
+    }
+    return records[i];
+  }
+
+  let prewarmed = false;
+  async function prewarm() {
+    if (prewarmed || disposed) return;
+    prewarmed = true;
+    const idle = () => new Promise((resolve) => (window.requestIdleCallback ? requestIdleCallback(resolve, { timeout: 250 }) : setTimeout(resolve, 40)));
+    for (let i = 0; i < n && !disposed; i++) {
+      getRecord(i);
+      await idle();
+    }
+    if (disposed || current) return;
+    // Compile every shader and upload every texture the pick will need, with one off-screen frame (the canvas
+    // is cleared straight afterwards): all records and the turntable visible, half transparent (that variant too)
+    records.forEach((r) => {
+      scene.add(r);
+      r.visible = true;
+      r.position.copy(seatedWorld);
+    });
+    turntable.visible = true;
+    setTableAmount(0.5);
+    sleeves.forEach((sl) => sl.setOpacity(0.5)); // the faded variant of the sleeve shaders
+    renderer.compile(scene, camera);
+    scene.traverse((o) => {
+      if (!o.material) return;
+      for (const m of [].concat(o.material)) for (const v of Object.values(m)) if (v && v.isTexture) renderer.initTexture(v);
+    });
+    // (its own camera, looking at the turntable, so nothing is culled)
+    const warmCamera = new THREE.PerspectiveCamera(40, 2, 0.5, 80);
+    warmCamera.position.set(tablePos.x, tablePos.y + 6, tablePos.z + 7);
+    warmCamera.lookAt(tablePos);
+    root.visible = true;
+    renderer.clear();
+    renderer.render(scene, warmCamera);
+    renderer.clear();
+    setTableAmount(1);
+    sleeves.forEach((sl) => sl.setOpacity(1));
+    turntable.visible = false;
+    records.forEach((r) => {
+      r.visible = false;
+      scene.remove(r);
+    });
+  }
+
   // Sets a record up (paused). `speed` scales the timeline; `lock` keeps the camera in the
   // playing layout (used when swapping).
-  function beginPick(i, { speed = 1, lock = false } = {}) {
+  // Where the record is when it has just slid out of its sleeve: standing in the row (a pick from the row) or sitting
+  // in the stack on the left (a swap)
+  function restFor(i, fromRow) {
     const s = sleeves[i];
-    const c = covers[i];
-    const record = createRecord({ title: c.title, side: c.side, year: c.year, cover: { color: c.color } });
-    record.useEnvironment(envTexture, K.ENV_INTENSITY);
-    scene.add(record);
-
-    // Where the record is when it has just slid out, with the sleeve sitting in the stack
-    restObject.position.set(0, s.restY, s.baseZ);
-    restObject.rotation.set(s.mesh.rotation.x, 0, 0);
-    restObject.scale.copy(s.mesh.scale);
+    const pose = fromRow ? standPose(s.rowY ?? 0) : stackPose(s.restY);
+    restObject.position.set(fromRow ? (s.rowX ?? 0) : 0, fromRow ? (s.rowY ?? 0) : s.restY, s.baseZ);
+    restObject.rotation.set(pose.rotX, 0, 0);
+    restObject.scale.setScalar(pose.scale);
     restObject.updateMatrixWorld(true);
-    const restStart = restObject.localToWorld(new THREE.Vector3(K.SLIDE_OUT, 0, 0));
-    const restQuat = restObject.getWorldQuaternion(new THREE.Quaternion());
+    return {
+      restStart: restObject.localToWorld(new THREE.Vector3(K.SLIDE_OUT, 0, 0)),
+      restQuat: restObject.getWorldQuaternion(new THREE.Quaternion()),
+      restScale: pose.scale,
+      camStart: fromRow ? { x: s.rowX ?? 0, y: s.rowY ?? 0 } : { x: 0, y: 0 }, // the camera in front of its sleeve
+    };
+  }
 
-    const p = createPickProgress();
-    const tl = createPickTimeline(p, update);
+  function beginPick(i, { speed = 1, lock = false, fromRow = true } = {}) {
+    const s = sleeves[i];
+    const record = getRecord(i);
+    if (!record.parent) scene.add(record);
+    const rest = restFor(i, fromRow);
+
+    const p = createPickProgress({ direct: fromRow });
+    const tl = createPickTimeline(p, update, { direct: fromRow });
     tl.timeScale(speed);
     const picked = {
       index: i,
@@ -622,9 +872,8 @@ export async function createShelfScene({ canvas, covers, onHover, onSelect, onSt
       tl,
       liftAtPick: s.state.lift,
       glowAtPick: s.state.glow,
-      restStart,
-      restQuat,
-      restScale: s.mesh.scale.x,
+      ...rest,
+      direct: fromRow,
     };
     current = picked;
     viewLock = lock;
@@ -662,7 +911,9 @@ export async function createShelfScene({ canvas, covers, onHover, onSelect, onSt
       return;
     }
     if (state !== "playing" || !current) return;
-    afterShowcaseExit(ejectNow);
+    // A pick from the row is its own timeline backwards, showcase included (the same beats in reverse)
+    if (current.direct && !reduceMotion) ejectNow();
+    else afterShowcaseExit(ejectNow);
   }
 
   // The same timeline, backwards
@@ -672,8 +923,8 @@ export async function createShelfScene({ canvas, covers, onHover, onSelect, onSt
     clearCollapseTimers();
     wantExpanded = false;
     setState("transitioning", c.index);
-    c.tl.timeScale(1);
-    c.tl.eventCallback("onReverseComplete", () => finishEject(c));
+    c.tl.timeScale(ROW.ejectSpeed);
+    c.tl.eventCallback("onReverseComplete", () => (c.direct ? finishEject(c) : backToRow(c)));
     if (reduceMotion) crossfade(() => c.tl.progress(0, false));
     else c.tl.reverse();
   }
@@ -696,15 +947,35 @@ export async function createShelfScene({ canvas, covers, onHover, onSelect, onSt
     tweenCollapse(0, true); // a swap always starts from the spread-out positions, even if the group was collapsed
     setState("transitioning", i);
 
-    old.tl.timeScale(K.SWAP_SPEED);
-    old.tl.eventCallback("onReverseComplete", () => {
+    // The old record's timeline plays backwards, then the new one plays forwards. A record that was picked from the
+    // row is first turned into the stack kind (its sleeve glides, unseen, into its place in the stack; its record
+    // flies back there), and played back only to where it is in its sleeve again.
+    const back = old.direct ? ROW.swapAt : 0;
+    const next = () => {
+      old.swapTween = null;
+      old.directTween?.kill();
+      old.directTween = null;
       retire(old);
-      const tl = beginPick(i, { speed: K.SWAP_SPEED, lock: true });
+      const tl = beginPick(i, { speed: K.SWAP_SPEED, lock: true, fromRow: false });
       if (reduceMotion) tl.progress(1, false);
       else tl.play(0);
-    });
-    if (reduceMotion) crossfade(() => old.tl.progress(0, false));
-    else old.tl.reverse();
+    };
+    old.tl.pause();
+    const duration = Math.max(0, old.tl.time() - back) / K.SWAP_SPEED;
+    if (old.direct) {
+      old.p.pin = 1;
+      Object.assign(old, restFor(old.index, false));
+      if (reduceMotion) old.p.direct = 0;
+      else old.directTween = gsap.to(old.p, { direct: 0, duration: Math.min(0.2, duration), ease: "none" });
+    }
+    if (reduceMotion) {
+      crossfade(() => {
+        old.tl.time(back, false);
+        next();
+      });
+    } else {
+      old.swapTween = old.tl.tweenTo(back, { ease: "none", duration, onComplete: next });
+    }
   }
 
   // Jump to the end of whatever is running (Esc, or a click anywhere)
@@ -716,6 +987,16 @@ export async function createShelfScene({ canvas, covers, onHover, onSelect, onSt
     if (exiting) showcaseTween?.progress(1, false); // finishes the showcase exit, which starts the eject / swap...
     if (state !== "transitioning" || !current) return; // ...and that is finished below
     const c = current;
+    if (c.back) {
+      c.back.progress(1); // a swapped record on its way back to the row
+      return;
+    }
+    if (c.swapTween) {
+      c.directTween?.progress(1);
+      c.swapTween.progress(1); // a swap on its way back: finishes it, which starts the new record...
+      if (current !== c && state === "transitioning") current.tl.progress(1, false); // ...so finish that too
+      return;
+    }
     if (c.tl.reversed()) {
       c.tl.progress(0, false); // eject: done. swap: the new record's timeline starts...
       if (state === "transitioning" && current && current !== c) current.tl.progress(1, false); // ...so finish it too
@@ -746,18 +1027,40 @@ export async function createShelfScene({ canvas, covers, onHover, onSelect, onSt
       if (!compact) tweenShowcase(1, { instant: true }); // a deep link lands in the showcase end state
     }
   }
+  // The label under a hovered / focused sleeve of the row: where it goes, in viewport px
+  const labelPos = new THREE.Vector3();
+  let labelOn = false;
+  function updateLabel() {
+    if (!onLabel) return;
+    const i = state === "stack" && !current && active >= 0 && rowK[active].v > 0.9 ? active : -1;
+    if (i >= 0) {
+      camera.updateMatrixWorld();
+      const sl = sleeves[i];
+      sl.mesh.getWorldPosition(labelPos).project(camera);
+      const halfHeight = scalePx * camera.zoom * sl.mesh.scale.x; // a facing sleeve is 2 units tall
+      onLabel(i, ((labelPos.x + 1) / 2) * viewW, ((1 - labelPos.y) / 2) * viewH + halfHeight + ROW.labelGap);
+      labelOn = true;
+    } else if (labelOn) {
+      onLabel(-1);
+      labelOn = false;
+    }
+  }
+
   // ---- Render loop (runs only while the canvas is on screen and the tab is visible) ----
   let raf = 0;
   let onScreen = true;
   let lastMs = 0;
   function frame(ms) {
     raf = requestAnimationFrame(frame);
+    if (import.meta.env.DEV) window.__frames = (window.__frames ?? 0) + 1; // dev: lets a test see the loop really stops
+    const jsStart = import.meta.env.DEV ? performance.now() : 0;
     const dt = Math.min(lastMs ? (ms - lastMs) / 1000 : 0, 0.1);
     lastMs = ms;
     const t = ms / 1000;
 
     const floatAmount = reduceMotion ? 0 : current ? current.p.bob : 1;
     placeSleeves(t, floatAmount);
+    updateLabel();
     if (current && !reduceMotion && current.p.spin > 0.001) current.record.spin(dt, current.p.spin);
 
     // The scene is drawn in up to three passes, each with the camera that suits what it shows:
@@ -768,17 +1071,43 @@ export async function createShelfScene({ canvas, covers, onHover, onSelect, onSt
     //     two, so its perspective changes smoothly and never switches
     const stackVisible = !(compact && cameraAmount() >= 1); // on narrow screens the stack is off screen while playing
     const arc = current ? current.p.arc : 0;
-    const recordWithStack = !!current && arc <= 0;
+    const table = current ? Math.max(current.p.table, current.p.pin) : 0;
+    setTableAmount(table);
+    const tableOn = tableShown && (!current || table > 0.001);
+    const recordInSleeve = !!current && arc <= 0;
     const recordInFlight = !!current && arc > 0 && arc < 1;
     const recordOnTable = !!current && arc >= 1;
 
     renderer.clear();
-    root.visible = stackVisible;
     turntable.visible = false;
-    if (current) current.record.visible = recordWithStack;
+    root.visible = stackVisible;
+    const shown = sleeves.map((sl) => sl.mesh.visible);
+    const chosenStands = !!current && sleeves[current.index].standing > 0.001;
+    // A pick from the row: once its sleeve has faded the record is drawn on its own, by a camera that glides from the
+    // one in front of its sleeve (frozen at the row layout) to the turntable's (whatever that is doing)
+    const recordSolo = !!current && current.direct && !current.p.pin && arc < 1 && (arc > 0 || !shown[current.index]);
+    // Pass 1: the sleeves lying down (the stack), with the main camera - plus the record while it is still sliding
+    // out of its sleeve, so that the opaque slab can hide it
+    sleeves.forEach((sl, j) => (sl.mesh.visible = shown[j] && !(sl.standing > 0.001)));
+    if (current) current.record.visible = recordInSleeve && !chosenStands && !recordSolo;
     renderer.render(scene, camera);
+    // Then each standing sleeve (the row), alone, with a camera in front of it (back to front); its record with it
+    if (stackVisible) {
+      // the chosen sleeve (and its record) last, so the record is never covered by a neighbour
+      const order = sleeves.map((_, i) => n - 1 - i).filter((i) => !current || i !== current.index);
+      if (current) order.push(current.index);
+      for (const i of order) {
+        if (!shown[i] || !(sleeves[i].standing > 0.001)) continue;
+        sleeves.forEach((sl, j) => (sl.mesh.visible = j === i));
+        if (current) current.record.visible = recordInSleeve && i === current.index && !recordSolo;
+        shiftCameraBy(rowCamera, sleeves[i].camX, sleeves[i].camY);
+        renderer.clearDepth();
+        renderer.render(scene, rowCamera);
+      }
+    }
+    sleeves.forEach((sl, j) => (sl.mesh.visible = shown[j]));
 
-    if (tableShown) {
+    if (tableOn) {
       renderer.clearDepth();
       root.visible = false;
       turntable.visible = true;
@@ -786,13 +1115,19 @@ export async function createShelfScene({ canvas, covers, onHover, onSelect, onSt
         // While it flies the record is drawn in pass 3. Here it only casts its shadow on the
         // turntable (visible, but writing neither colour nor depth).
         current.record.visible = recordOnTable || recordInFlight;
-        setRecordDraws(current.record, !recordInFlight);
+        setRecordDraws(current.record, !recordInFlight && !recordSolo);
       }
       renderer.render(scene, tableCamera);
     }
 
-    if (recordInFlight) {
-      shiftCamera(recordCamera, arc);
+    if (recordInFlight || recordSolo) {
+      if (current.direct && !current.p.pin) {
+        shiftCameraBy(startCamera, current.camStart.x, current.camStart.y, layoutStack, layoutStack.zoom);
+        blendCameras(recordCamera, startCamera, tableCamera, arc);
+      } else {
+        // Its camera glides from the stack camera to the turntable's
+        shiftCamera(recordCamera, arc);
+      }
       renderer.clearDepth();
       root.visible = false;
       turntable.visible = false;
@@ -807,6 +1142,7 @@ export async function createShelfScene({ canvas, covers, onHover, onSelect, onSt
       current.record.visible = true;
       setRecordDraws(current.record, true);
     }
+    if (import.meta.env.DEV) (window.__js ??= []).push([ms, +(performance.now() - jsStart).toFixed(1)]); // dev: how long the script spent on this frame
   }  function sync() {
     const shouldRun = onScreen && !document.hidden;
     if (shouldRun && !raf) {
@@ -831,9 +1167,22 @@ export async function createShelfScene({ canvas, covers, onHover, onSelect, onSt
   // collapsed, a click on the group only expands it.
   const raycaster = new THREE.Raycaster();
   const pointer = new THREE.Vector2();
+  // The scene listens on the whole window (the row and the stack reach beyond the section's centred column), but only
+  // reacts within the section's height, and never to anything that starts on a link, button, the panel or the nav
+  const ignoresPointer = (e) => {
+    if (e.target.closest?.("a, button, input, .info, .demo-frame, .nav")) return true;
+    const r = shelfEl.getBoundingClientRect();
+    return e.clientY < r.top || e.clientY > r.bottom;
+  };
   function aim(e) {
     const rect = canvas.getBoundingClientRect();
+    if (!rect.width || !rect.height) {
+      pointer.set(2, 2); // the canvas is hidden: nothing can be hit
+      raycaster.setFromCamera(pointer, camera);
+      return;
+    }
     pointer.set(((e.clientX - rect.left) / rect.width) * 2 - 1, -((e.clientY - rect.top) / rect.height) * 2 + 1);
+    camera.updateMatrixWorld(); // the row is drawn by other cameras, so this one is not updated by rendering
     raycaster.setFromCamera(pointer, camera);
   }
   function pickAt(e) {
@@ -857,24 +1206,29 @@ export async function createShelfScene({ canvas, covers, onHover, onSelect, onSt
   };
   const onMove = (e) => {
     if (e.pointerType === "touch") return;
+    if (ignoresPointer(e)) {
+      if (hovered !== -1) onLeave();
+      return;
+    }
     if (state === "stack") {
       const i = pickAt(e);
-      canvas.style.cursor = i >= 0 ? "pointer" : "";
+      document.body.style.cursor = i >= 0 ? "pointer" : "";
       setHovered(i);
     } else if (groupActive()) {
       const inside = inGroup(e);
       if (inside) requestExpand();
       else requestCollapse();
-      canvas.style.cursor = inside ? "pointer" : "";
+      document.body.style.cursor = inside ? "pointer" : "";
       setHovered(isOpen() ? pickAt(e) : -1); // individual glow only while the group is open
     }
   };
   const onLeave = () => {
-    canvas.style.cursor = "";
+    document.body.style.cursor = "";
     setHovered(-1);
     if (groupActive()) requestCollapse();
   };
   const onPointerDown = (e) => {
+    if (ignoresPointer(e)) return;
     openAtPointerDown = state !== "playing" || isOpen();
     if (!groupActive()) return;
     const inside = inGroup(e);
@@ -884,6 +1238,7 @@ export async function createShelfScene({ canvas, covers, onHover, onSelect, onSt
     }
   };
   const onClick = (e) => {
+    if (ignoresPointer(e)) return;
     if (state === "stack") {
       const i = pickAt(e);
       if (i >= 0) onSelect(i);
@@ -898,17 +1253,32 @@ export async function createShelfScene({ canvas, covers, onHover, onSelect, onSt
   };
   // On touch screens a tap anywhere else on the page also counts as "outside"
   const onDocumentPointerDown = (e) => {
-    if (e.pointerType === "touch" && e.target !== canvas) collapse();
+    if (e.pointerType === "touch" && !shelfEl.contains(e.target)) collapse();
   };
-  canvas.addEventListener("pointermove", onMove);
-  canvas.addEventListener("pointerleave", onLeave);
-  canvas.addEventListener("pointerdown", onPointerDown);
-  canvas.addEventListener("click", onClick);
+  window.addEventListener("pointermove", onMove);
+  document.documentElement.addEventListener("pointerleave", onLeave);
+  window.addEventListener("pointerdown", onPointerDown);
+  window.addEventListener("click", onClick);
   document.addEventListener("pointerdown", onDocumentPointerDown, true);
   // ---- Dev helpers (dev builds only): window.__tl, window.__shelf and a scrub slider ----
   let devSlider = null;
   let showSlider = null;
   if (import.meta.env.DEV) {
+    window.__shelf = {
+      pick, eject, swap, skip, expand, collapse,
+      getState: () => state,
+      collapseAmount: () => collapseK.v,
+      // dev: what is where right now (for measuring the pick / eject motion)
+      snap: () => ({
+        state,
+        tl: current ? +current.tl.time().toFixed(3) : null,
+        p: current ? Object.fromEntries(Object.entries(current.p).filter(([, v]) => typeof v === "number").map(([k, v]) => [k, +v.toFixed(3)])) : null,
+        table: tableShown,
+        s: sleeves.map((sl) => [+sl.mesh.position.x.toFixed(2), +sl.mesh.position.y.toFixed(2), +sl.mesh.rotation.x.toFixed(2), sl.mesh.visible ? 1 : 0]),
+      }),
+    };
+  }
+  if (devTools) {
     devSlider = document.createElement("input");
     devSlider.type = "range";
     devSlider.min = "0";
@@ -928,7 +1298,6 @@ export async function createShelfScene({ canvas, covers, onHover, onSelect, onSt
       update();
     });
     document.body.append(devSlider);
-    window.__shelf = { pick, eject, swap, skip, expand, collapse, getState: () => state, collapseAmount: () => collapseK.v };
     // Showcase: set(progress 0..1) jumps (and stops any tween), enter() / exit() tween it
     window.__showcase = {
       set: (v) => {
@@ -962,6 +1331,9 @@ export async function createShelfScene({ canvas, covers, onHover, onSelect, onSt
     eject,
     skip,
     jumpTo,
+    prewarm, // build the records, compile the shaders and upload the textures before a sleeve is clicked
+    enterRow, // spread the sleeves out from the pile (the canvas just became visible)
+    resetRow, // back to the pile (the canvas just went away)
     expand, // the group of remaining sleeves spreads out (e.g. a sleeve button got keyboard focus)
     requestCollapse, // ...and collapses again after a short delay (focus left the group)
     getState: () => state,
@@ -974,17 +1346,18 @@ export async function createShelfScene({ canvas, covers, onHover, onSelect, onSt
       compactQuery.removeEventListener("change", onCompactChange);
       intersection.disconnect();
       document.removeEventListener("visibilitychange", sync);
-      canvas.removeEventListener("pointermove", onMove);
-      canvas.removeEventListener("pointerleave", onLeave);
-      canvas.removeEventListener("pointerdown", onPointerDown);
-      canvas.removeEventListener("click", onClick);
+      window.removeEventListener("pointermove", onMove);
+      document.documentElement.removeEventListener("pointerleave", onLeave);
+      window.removeEventListener("pointerdown", onPointerDown);
+      window.removeEventListener("click", onClick);
       document.removeEventListener("pointerdown", onDocumentPointerDown, true);
       clearCollapseTimers();
       collapseTween?.kill();
       groupHit.geometry.dispose();
       groupHit.material.dispose();
-      canvas.style.cursor = "";
+      document.body.style.cursor = "";
       canvas.getAnimations().forEach((a) => a.cancel());
+      canvas.style.clipPath = "";
       if (current) {
         current.tl.kill();
         scene.remove(current.record);
@@ -995,6 +1368,8 @@ export async function createShelfScene({ canvas, covers, onHover, onSelect, onSt
         gsap.killTweensOf(s.state);
         s.dispose();
       });
+      records.forEach((r) => r?.dispose());
+      grooveTexture?.dispose();
       turntable.dispose();
       roomScene.traverse((o) => {
         o.geometry?.dispose();

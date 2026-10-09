@@ -1,5 +1,6 @@
 // Build-time rendering of the record shelf (used by vite.config.js):
 // the text list of tracks and the stack of sleeves. Both are real <button>s.
+import { SLEEVE_BORDER } from "../src/scene/tweaks.js";
 
 const escapeHtml = (s) =>
   String(s)
@@ -74,7 +75,11 @@ function renderCover(p, i) {
     })
     .join("");
 
-  return `<svg class="sleeve-cover" viewBox="0 0 200 200" aria-hidden="true" focusable="false">
+  const ink = p.cover.ink ?? "#ece6d6";
+  const border = p.cover.border
+    ? `<rect x="0.6" y="0.6" width="198.8" height="198.8" fill="none" stroke="${SLEEVE_BORDER}" stroke-width="1.2" />`
+    : "";
+  return `<svg class="sleeve-cover" viewBox="0 0 200 200" style="color:${escapeHtml(ink)}" aria-hidden="true" focusable="false">
             <defs>
               <filter id="grain-${i}" x="0" y="0" width="100%" height="100%">
                 <feTurbulence type="fractalNoise" baseFrequency="0.85" numOctaves="2" stitchTiles="stitch" />
@@ -86,6 +91,7 @@ function renderCover(p, i) {
             <text class="cover-label" x="14" y="24">SIDE ${escapeHtml(p.side)} · ${escapeHtml(p.year)}</text>
             ${motifs[p.cover.motif] ?? ""}
             <text class="cover-title">${tspans}</text>
+            ${border}
           </svg>`;
 }
 
@@ -94,7 +100,7 @@ function renderCover(p, i) {
 export function renderCovers(projects) {
   return projects
     .map(
-      (p, i) => `        <template class="cover-template" data-index="${i}" data-color="${escapeHtml(p.cover.color)}" data-title="${escapeHtml(p.title)}" data-side="${escapeHtml(p.side)}" data-year="${escapeHtml(p.year)}">
+      (p, i) => `        <template class="cover-template" data-index="${i}" data-color="${escapeHtml(p.cover.color)}" data-ink="${escapeHtml(p.cover.ink ?? "")}" data-label="${escapeHtml(p.cover.label ?? "")}" data-label-ink="${escapeHtml(p.cover.labelInk ?? "")}"${p.cover.border ? ' data-border="1"' : ""} data-title="${escapeHtml(p.title)}" data-side="${escapeHtml(p.side)}" data-year="${escapeHtml(p.year)}">
           ${renderCover(p, i)}
         </template>`,
     )
@@ -107,7 +113,7 @@ export function renderTracks(projects) {
     let group = sides.find((s) => s.side === p.side);
     if (!group) sides.push((group = { side: p.side, items: [] }));
     group.items.push(`            <li>
-              <button type="button" class="track" data-index="${i}" data-slug="${escapeHtml(p.slug)}" aria-pressed="false">
+              <button type="button" class="track" data-index="${i}" data-slug="${escapeHtml(p.slug)}" data-short="${escapeHtml(p.shortTitle ?? p.title)}" aria-pressed="false">
                 <span class="track-title">${escapeHtml(p.title)}</span>
                 <span class="track-year label">${escapeHtml(p.year)}</span>
               </button>
@@ -178,14 +184,4 @@ export function renderPanels(projects) {
         </section>`;
     })
     .join("\n");
-}
-
-// The landing page's tracklist: one link per project (01 RAG, 02 EXPENSE TRACKER, ...)
-export function renderHeroTracks(projects) {
-  return projects
-    .map(
-      (p, i) =>
-        `<li><a href="#/projects/${escapeHtml(p.slug)}"><span class="num">${String(i + 1).padStart(2, "0")}</span>${escapeHtml(p.shortTitle ?? p.title)}</a></li>`,
-    )
-    .join("\n            ");
 }

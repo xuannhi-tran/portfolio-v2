@@ -2,7 +2,7 @@ import { existsSync, statSync } from "node:fs";
 import { resolve } from "node:path";
 import { pathToFileURL } from "node:url";
 import { renderTilePhoto, renderContactLinks, renderCoverLinks, renderCvButton } from "./scripts/site-links.js";
-import { renderHeroTracks, renderCovers, renderPanels, renderTracks, screenshotUrl } from "./scripts/sleeves.js";
+import { renderCovers, renderPanels, renderTracks, screenshotUrl } from "./scripts/sleeves.js";
 
 const dataFile = resolve(import.meta.dirname, "src/projects.js");
 const siteFile = resolve(import.meta.dirname, "src/site.js");
@@ -57,7 +57,6 @@ function projectCards() {
         )
         .replace("<!-- site-cv-button -->", renderCvButton(site))
         .replace("<!-- project-cards -->", projects.map(renderCard).join("\n"))
-        .replace("<!-- hero-tracks -->", renderHeroTracks(projects))
         .replace("<!-- project-tracks -->", renderTracks(projects))
         .replace("<!-- project-covers -->", renderCovers(projects))
         .replace("<!-- project-panels -->", renderPanels(projects));

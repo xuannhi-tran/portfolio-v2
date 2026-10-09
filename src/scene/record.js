@@ -109,19 +109,23 @@ function drawLabel(canvas, project) {
   const ctx = canvas.getContext("2d");
   ctx.clearRect(0, 0, size, size);
 
-  ctx.fillStyle = project.cover.color;
+  ctx.fillStyle = project.cover.label || project.cover.color; // some records have a lighter label than their sleeve
   ctx.beginPath();
   ctx.arc(c, c, c, 0, Math.PI * 2);
   ctx.fill();
 
+  const ink = project.cover.labelInk || project.cover.ink || LABEL.ink;
+
   // Fine ring near the edge
-  ctx.strokeStyle = "rgba(236,230,214,0.35)";
+  ctx.globalAlpha = 0.35;
+  ctx.strokeStyle = ink;
   ctx.lineWidth = size * 0.004;
   ctx.beginPath();
   ctx.arc(c, c, c * 0.92, 0, Math.PI * 2);
   ctx.stroke();
+  ctx.globalAlpha = 1;
 
-  ctx.fillStyle = LABEL.ink;
+  ctx.fillStyle = ink;
   ctx.textAlign = "center";
   ctx.textBaseline = "middle";
 
@@ -148,24 +152,28 @@ function drawLabel(canvas, project) {
   ctx.fill();
 }
 
-// Returns a THREE.Group holding a vinyl record lying flat, centred on its own
-// origin. It has no renderer of its own: add it to any scene.
-//   record.setProject(project)  swap the label
-//   record.spin(dt, speed = 1)  advance the spin (dt in seconds; 1 = the calm base speed)
-//   record.dispose()            free geometries / textures
-export function createRecord(project) {
-  const group = new THREE.Group();
-  const spinner = new THREE.Group(); // everything that turns
-  group.add(spinner);
-
-  // Disc with grooves
+// The grooves are the same on every record, so a scene can draw them once and share the texture
+export function createGrooveTexture() {
   const grooveCanvas = document.createElement("canvas");
   grooveCanvas.width = grooveCanvas.height = LABEL.grooveTextureSize;
   drawGrooves(grooveCanvas);
   const grooveTexture = new THREE.CanvasTexture(grooveCanvas);
   grooveTexture.colorSpace = THREE.SRGBColorSpace;
   grooveTexture.anisotropy = 16; // clamped to what the GPU supports
+  return grooveTexture;
+}
 
+// Returns a THREE.Group holding a vinyl record lying flat, centred on its own
+// origin. It has no renderer of its own: add it to any scene. `grooveTexture` is optional (see above).
+//   record.setProject(project)  swap the label
+//   record.spin(dt, speed = 1)  advance the spin (dt in seconds; 1 = the calm base speed)
+//   record.dispose()            free geometries / textures
+export function createRecord(project, { grooveTexture = createGrooveTexture() } = {}) {
+  const group = new THREE.Group();
+  const spinner = new THREE.Group(); // everything that turns
+  group.add(spinner);
+
+  // Disc with grooves
   const vinylTop = new THREE.MeshPhysicalMaterial({
     map: grooveTexture,
     roughness: VINYL.roughness,

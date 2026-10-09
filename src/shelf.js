@@ -1,5 +1,8 @@
-// Record shelf screen: the text list, the 3D scene, and the controls around it.
-// three.js and gsap are imported only when the screen opens, so the cover stays light.
+// The Projects section: the 3D scene (a row of sleeves) and the controls around it.
+// three.js and gsap are imported only when the section is about to be reached, so the hero stays light.
+// The canvas is a fixed full-viewport layer that is hidden (and its render loop stopped) unless this
+// section is on screen: it shows once ROW.enterAt of the section is visible (the sleeves then spread out
+// from a pile once) and fades out when less than ROW.leaveAt is.
 //
 // States (mirrored from the scene): "stack" -> "transitioning" -> "playing".
 //  - stack: the text list is shown. Hovering or focusing a title, or hovering a sleeve, lifts
@@ -15,7 +18,7 @@
 // Routes: #/projects (the stack) and #/projects/<slug> (that record playing). Picking, swapping and
 // ejecting update the hash; opening a URL, back and forward jump straight to the state, no animation.
 
-import { COMPACT, DEMO_IMAGE, LIVE_DEMO, PANEL, SHOWCASE } from "./scene/tweaks.js";
+import { COMPACT, DEMO_IMAGE, LIVE_DEMO, PANEL, ROW, SHOWCASE } from "./scene/tweaks.js";
 
 const shelf = document.querySelector(".shelf");
 const crate = document.querySelector(".crate");
@@ -47,10 +50,11 @@ let picked = -1; // the record that is playing (or on its way)
 let uiState = "stack";
 let lastAction = "pick"; // "pick" | "swap" | "eject": decides where focus goes afterwards
 let scene = null;
-let entered = false;
+let creating = false; // the scene is being built
 let transitionStart = 0;
 
 const titles = tracks.map((t) => t.querySelector(".track-title").textContent);
+const shortTitles = tracks.map((t, i) => t.dataset.short || titles[i]);
 let playButtons = []; // visually hidden, wide screens
 let thumbs = []; // visible, narrow screens
 
@@ -581,6 +585,50 @@ function showDemoPlaceholder() {
   placeFrame();
 }
 
+// ---- The label under a hovered / focused sleeve ----------------------------------
+// The scene says where it goes (viewport px) every frame, since the row moves with the page.
+let labelEl = null;
+function showLabel(i, x, y) {
+  if (!labelEl) return;
+  if (i < 0) {
+    labelEl.hidden = true;
+    return;
+  }
+  labelEl.textContent = shortTitles[i];
+  labelEl.hidden = false;
+  labelEl.style.left = `${x}px`;
+  labelEl.style.top = `${y}px`;
+}
+
+// ---- Scroll lock -------------------------------------------------------------------
+// While a record is picked or playing the page does not scroll (the scene is in the viewport and stays there).
+// A pick first scrolls the scene into place; the lock follows once that is done.
+function lockScroll() {
+  htmlElement.classList.add("shelf-locked");
+}
+function unlockScroll() {
+  htmlElement.classList.remove("shelf-locked");
+}
+function lockWhenAligned() {
+  if (routing || reducedMotion()) {
+    lockScroll();
+    return;
+  }
+  const r = crate.getBoundingClientRect();
+  const toGo = compactQuery.matches ? r.top - 64 : r.top + r.height / 2 - window.innerHeight / 2;
+  if (Math.abs(toGo) < 3) {
+    lockScroll();
+    return;
+  }
+  const lock = () => {
+    window.removeEventListener("scrollend", lock);
+    clearTimeout(timer);
+    if (uiState !== "stack") lockScroll();
+  };
+  const timer = setTimeout(lock, 900);
+  window.addEventListener("scrollend", lock, { once: true });
+}
+
 // ---- State ------------------------------------------------------------------
 function render() {
   shelf.dataset.state = uiState;
@@ -655,6 +703,7 @@ function onStateChange(next, index) {
         block: compactQuery.matches ? "start" : "center",
         behavior: routing || reducedMotion() ? "auto" : "smooth",
       });
+      lockWhenAligned();
     }
   }
 
@@ -662,18 +711,12 @@ function onStateChange(next, index) {
   if (next === "playing") picked = index;
   if (next === "stack") picked = -1;
   render(); // first, so the controls are visible and can take focus
+  if (next === "stack") unlockScroll(); // back in the row: the page scrolls again
 
   if (next === "playing") {
     placePanel();
     if (lastAction === "swap" && !routing) focusNextPlayable(index);
     else panels[index]?.querySelector(".panel-title")?.focus({ preventScroll: true }); // the panel just opened
-  }
-  if (next === "stack" && previous !== "stack" && !routing) {
-    // The heading and the list are back: scroll up to them
-    window.scrollTo({
-      top: 0,
-      behavior: matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth",
-    });
   }
   if (next === "stack" && !routing && (document.activeElement.closest?.(".panel") || document.activeElement === ejectButton || document.activeElement === document.body)) {
     // Back where we started: return keyboard focus to the record that was picked
@@ -702,6 +745,23 @@ export function initShelf() {
   });
   setUpDemo();
   setUpLive();
+  setUpActivation();
+
+  labelEl = document.createElement("p");
+  labelEl.className = "label sleeve-label";
+  labelEl.setAttribute("aria-hidden", "true"); // the sleeve's own button says the same
+  labelEl.hidden = true;
+  shelf.append(labelEl);
+
+  // Left / right arrows move along the row (the keyboard path to the sleeves); Enter picks the focused one
+  document.querySelector(".tracklist")?.addEventListener("keydown", (e) => {
+    const step = { ArrowRight: 1, ArrowDown: 1, ArrowLeft: -1, ArrowUp: -1 }[e.key];
+    if (!step || uiState !== "stack") return;
+    const i = tracks.indexOf(document.activeElement);
+    if (i < 0) return;
+    e.preventDefault();
+    tracks[Math.max(0, Math.min(tracks.length - 1, i + step))].focus({ preventScroll: true });
+  });
 
   document.addEventListener("keydown", (e) => {
     if (e.key !== "Escape") return;
@@ -729,9 +789,91 @@ function fallBackToList() {
   location.replace("#/list");
 }
 
+// ---- Showing and hiding the canvas -----------------------------------------------
+let canvasOn = false;
+let wantCanvas = false;
+
+function showCanvas() {
+  wantCanvas = true;
+  if (!scene || canvasOn) return;
+  canvasOn = true;
+  canvas.getAnimations().forEach((a) => a.cancel());
+  canvas.hidden = false;
+  if (!reducedMotion()) canvas.animate([{ opacity: 0 }, { opacity: 1 }], { duration: 250 });
+  if (uiState === "stack") scene.enterRow(); // the sleeves spread out from the pile
+}
+
+function hideCanvas({ instant = false } = {}) {
+  wantCanvas = false;
+  if (!canvasOn || uiState !== "stack") return; // a record that is playing stays on screen
+  canvasOn = false;
+  const done = () => {
+    if (canvasOn) return;
+    canvas.hidden = true; // display: none, so the scene's own observer stops its render loop
+    scene?.resetRow(); // the pile again, for the next time
+  };
+  canvas.getAnimations().forEach((a) => a.cancel());
+  if (instant || reducedMotion()) {
+    done();
+    return;
+  }
+  const fade = canvas.animate([{ opacity: 1 }, { opacity: 0 }], { duration: ROW.fadeOut * 1000, fill: "forwards" });
+  fade.finished.then(
+    () => {
+      done();
+      fade.cancel();
+    },
+    () => {},
+  );
+}
+
+// How much of the section is on screen: the share of the smaller of the section and the viewport
+function visibleShare(entry) {
+  const height = Math.min(entry.boundingClientRect.height, entry.rootBounds?.height ?? window.innerHeight);
+  return height ? entry.intersectionRect.height / height : 0;
+}
+
+function setUpActivation() {
+  if (!shelf || !canvas) return;
+  canvas.hidden = true;
+  new IntersectionObserver(
+    (entries) => {
+      const share = visibleShare(entries[entries.length - 1]);
+      if (share >= ROW.enterAt) {
+        enterShelf();
+        showCanvas();
+      } else if (share < ROW.leaveAt) {
+        hideCanvas();
+      }
+    },
+    { threshold: Array.from({ length: 21 }, (_, i) => i / 20) },
+  ).observe(shelf);
+  // Build the scene a little before the section is reached, so its first view is not empty
+  new IntersectionObserver(
+    (entries) => {
+      if (entries.some((e) => e.isIntersecting)) enterShelf();
+    },
+    { rootMargin: "60% 0px" },
+  ).observe(shelf);
+}
+
+// Decode the screenshots before they are needed (kept in memory), so showing one never stalls a frame.
+// The live iframe is never touched here: it is only created by a click on "Try it live".
+const demoPrefetch = [];
+function prefetchDemos() {
+  if (demoPrefetch.length) return;
+  panels.forEach((panel) => {
+    const img = new Image();
+    img.decoding = "async";
+    img.src = `/demos/${panel.dataset.slug}.png`;
+    img.decode().catch(() => {}); // a project without a screenshot is fine
+    demoPrefetch.push(img);
+  });
+}
+
 export async function enterShelf() {
-  entered = true;
-  if (scene || !canvas) return;
+  if (scene || creating || !canvas) return;
+  creating = true;
 
   try {
     const { createShelfScene } = await import("./scene/index.js");
@@ -747,33 +889,38 @@ export async function enterShelf() {
       onStateChange,
       onPanel,
       onShowcase,
+      onLabel: showLabel,
     });
 
-    if (!entered) {
-      created.dispose(); // left the screen while it was loading
-      return;
-    }
     scene = created;
+    creating = false;
     render();
+    scene.prewarm(); // records, shaders and textures, before anything is clicked
+    prefetchDemos();
+    if (wantCanvas) showCanvas();
     applyRoute();
   } catch (err) {
+    creating = false;
     console.warn("3D shelf unavailable, showing the list instead.", err);
     fallBackToList();
   }
 }
 
+// The list view (or a dev preview) replaces the page: close any open record and hide the canvas
 export function leaveShelf() {
-  entered = false;
   endLive();
-  // Nothing of a playing record may be left behind for the next visit
+  showLabel(-1);
   panels.forEach((panel) => (panel.hidden = true));
   if (demoFrame) demoFrame.hidden = true;
   wantedSlug = null;
-  scene?.dispose();
-  scene = null;
+  if (scene && uiState !== "stack") {
+    routing = true;
+    scene.jumpTo(-1);
+    routing = false;
+  }
+  hideCanvas({ instant: true });
+  unlockScroll();
   active = -1;
-  picked = -1;
-  uiState = "stack";
   render();
 }
 

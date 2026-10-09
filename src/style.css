@@ -44,7 +44,7 @@ body {
   --hero-visible: calc(var(--hero-d) * (1 - var(--hero-crop))); /* how much of the record is on screen */
   position: relative;
   display: grid;
-  grid-template-rows: 1fr auto;
+  grid-template-rows: 1fr;
   min-height: 100svh;
   max-width: none;
   margin: 0;
@@ -224,30 +224,7 @@ body {
   opacity: 0;
 }
 
-/* The tracklist along the bottom */
-.hero-tracks {
-  position: relative;
-  z-index: 1;
-  padding: 1.1rem clamp(1.5rem, 6vw, 6rem) 1.4rem;
-  border-top: 1px solid rgba(255, 255, 255, 0.15);
-}
-
-.hero-tracks .links {
-  margin: 0;
-  gap: 0.5rem 2.2rem;
-}
-
-.hero-tracks .num {
-  margin-right: 0.35em;
-  color: var(--muted);
-}
-
-.hero-tracks a:hover .num,
-.hero-tracks a:focus-visible .num {
-  color: var(--text);
-}
-
-/* Narrow screens: the record on top (cropped by the right edge), the text below, a 2 x 2 tracklist */
+/* Narrow screens: the record on top (cropped by the right edge), the text below */
 @media (max-width: 899.98px) {
   .cover {
     --hero-d: 62vw;
@@ -280,20 +257,6 @@ body {
 
   .hero-button {
     padding: 0.9rem 1.8rem;
-  }
-
-  .hero-tracks {
-    padding-inline: 1.5rem;
-  }
-
-  .hero-tracks .links {
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-    gap: 0.9rem 1rem;
-  }
-
-  .hero-tracks .links a {
-    display: inline-block;
   }
 }
 
@@ -896,11 +859,13 @@ h2 {
   color: var(--text);
 }
 
-/* Record shelf */
+/* Record shelf: the Projects section of the landing page */
 .shelf {
   max-width: 44rem;
+  min-height: 100svh;
   margin: 0 auto;
   padding: 5rem 1.5rem 4rem;
+  scroll-margin-top: 0;
 }
 
 .shelf > * {
@@ -932,9 +897,24 @@ h2 {
     gap: 3rem;
     align-items: start;
   }
+
+  .shelf-layout .crate {
+    grid-column: 2;
+  }
 }
 
-/* Left: titles grouped under SIDE A / SIDE B */
+/* The text list is only for keyboard and screen reader users now (the titles show as labels under the
+   sleeves in the scene): focusing an item lifts its sleeve */
+.tracklist {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}
+
+/* Titles grouped under SIDE A / SIDE B */
 .track-group + .track-group {
   margin-top: 2rem;
 }
@@ -993,7 +973,9 @@ h2 {
 .shelf {
   position: relative;
   isolation: isolate; /* keeps the canvas (z-index -1) behind the text but above the page */
-  pointer-events: none; /* clicks fall through to the canvas, which only reacts to the sleeves... */
+  /* The canvas itself ignores the pointer (so it never blocks the hero or About); the scene listens on this
+     section instead, and ignores anything that starts on a link or button (src/scene/index.js) */
+  pointer-events: auto;
 }
 
 .shelf :is(h2, p, a, button, .tracklist) {
@@ -1112,8 +1094,18 @@ h2 {
   display: block;
   width: 100%;
   height: 100%;
-  pointer-events: auto;
-  touch-action: pan-y; /* keep vertical page scrolling working over the canvas */
+  pointer-events: none;
+}
+
+/* The title under a hovered / focused sleeve (src/shelf.js places it) */
+.shelf .sleeve-label {
+  position: fixed;
+  z-index: 3;
+  margin: 0;
+  transform: translateX(-50%);
+  color: var(--text);
+  white-space: nowrap;
+  pointer-events: none;
 }
 
 .shelf-status {
@@ -1123,6 +1115,29 @@ h2 {
 
 .list-link {
   display: inline-block;
+}
+
+/* "Pick a record" on the left, "View as list" on the right, under the heading */
+.shelf-sub {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 0.5rem 1.5rem;
+}
+
+.shelf-sub > * {
+  margin: 0;
+}
+
+.shelf-sub .list-link {
+  transition: opacity 0.4s ease, visibility 0s;
+}
+
+.shelf:not([data-state="stack"]) .shelf-sub .list-link {
+  opacity: 0;
+  visibility: hidden;
+  transition: opacity 0.4s ease, visibility 0s 0.4s;
 }
 
 /* Info panel: the right column on wide screens (src/shelf.js places it level with the scene),
@@ -1541,7 +1556,8 @@ html {
   scrollbar-gutter: stable;
 }
 
-html.demo-live {
+html.demo-live,
+html.shelf-locked {
   overflow: hidden;
 }
 

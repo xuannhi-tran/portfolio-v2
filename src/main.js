@@ -1,6 +1,9 @@
-// Hash routes: #/ (cover, about, contact), #/projects (record shelf), #/projects/<slug> (that record
-// playing), #/list (static cards).
-// Plain #about / #contact links keep working and scroll within the home view.
+// One scrolling page: hero, Projects (the record row), About, Contact. Hash routes:
+//   #/                     the top of the page
+//   #/projects             scrolls to the Projects section
+//   #/projects/<slug>      scrolls there and opens that record
+//   #about / #contact      scroll to those sections
+//   #/list                 the static cards (the fallback view, replaces the page)
 // Without JS every section is visible, so the content stays readable.
 
 import { initAbout } from "./about.js";
@@ -10,9 +13,10 @@ import { initShelf, enterShelf, leaveShelf, syncShelfRoute } from "./shelf.js";
 const views = document.querySelectorAll("[data-view]");
 const projectsLink = document.querySelector('[data-nav="projects"]');
 
-// Dev-only preview of the 3D turntable and record: #/dev/turntable (not in production builds)
+// Dev-only preview of the 3D turntable and record: /?dev=1#/dev/turntable (dev server only, never in production builds)
 let unmountDev = null;
 let devToken = 0;
+let firstRoute = true; // the first scroll (a fresh load) is instant, later ones are smooth
 
 function route() {
   const hash = location.hash;
@@ -20,7 +24,7 @@ function route() {
   let target = null;
 
   const token = ++devToken;
-  if (import.meta.env.DEV) {
+  if (import.meta.env.DEV && new URLSearchParams(location.search).has("dev")) {
     unmountDev?.();
     unmountDev = null;
     if (hash === "#/dev/turntable") {
@@ -37,15 +41,13 @@ function route() {
 
   let slug = null;
   const project = hash.match(/^#\/projects\/([\w-]+)$/);
-  if (hash === "#/projects") {
-    view = "shelf";
-  } else if (project) {
-    view = "shelf";
-    slug = project[1]; // an unknown slug is sent back to #/projects by the shelf
+  if (hash === "#/projects" || project) {
+    target = document.getElementById("shelf");
+    slug = project ? project[1] : null; // an unknown slug is sent back to #/projects by the shelf
   } else if (hash === "#/list") {
     view = "list";
   } else if (hash === "#projects") {
-    // Old anchor: send it to the shelf.
+    // Old anchor: send it to the Projects section.
     location.replace("#/projects");
     return;
   } else if (!hash.startsWith("#/") && hash.length > 1) {
@@ -57,21 +59,21 @@ function route() {
     el.hidden = el.dataset.view !== view;
   });
 
-  if (projectsLink) {
-    if (view === "home") projectsLink.removeAttribute("aria-current");
-    else projectsLink.setAttribute("aria-current", "page");
-  }
+  const behavior = firstRoute || matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth";
+  firstRoute = false;
 
-  if (target) target.scrollIntoView();
-  else window.scrollTo(0, 0);
-
-  // The 3D scene only exists while the shelf is on screen.
-  if (view === "shelf") {
-    enterShelf();
-    syncShelfRoute(slug);
-  } else {
+  if (view === "list") {
+    window.scrollTo(0, 0);
     leaveShelf();
+    return;
   }
+
+  if (target) target.scrollIntoView({ behavior });
+  else window.scrollTo({ top: 0, behavior });
+
+  // A record is only open for a #/projects/<slug> route; any other route closes it
+  if (slug) enterShelf();
+  syncShelfRoute(slug);
 }
 
 initShelf();

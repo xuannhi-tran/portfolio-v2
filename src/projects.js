@@ -3,19 +3,22 @@
 // liveEnabled: true lets visitors load that demo in an iframe inside the showcase ("Try it live").
 // liveNote: an optional short caption shown under the frame while the demo is live.
 // slug is used in the URL (#/projects/<slug>); tracks are the three notes in the info panel (and the list view).
-// The screenshot for each project is public/demos/<slug>.png. cover.color / cover.motif style the album sleeve
-// on the shelf (motif: "document" | "bars" | "compass" | "wave").
+// The screenshot for each project is public/demos/<slug>.png. cover styles the album sleeve on the shelf (and the
+// record's centre label): color = its tone (the site is black and white, so each project is a different grey),
+// ink = the text and motif colour, border = a thin light outline for the darkest sleeves (SLEEVE_BORDER in
+// src/scene/tweaks.js), label / labelInk = the record's centre label, if it should differ from the sleeve (RAG's
+// sleeve is near-black, so its label is cream), motif: "document" | "bars" | "compass" | "wave".
 export const projects = [
   {
     title: "RAG Document Assistant",
     slug: "rag",
-    shortTitle: "RAG", // the landing page tracklist
+    shortTitle: "RAG", // the label under a sleeve when it is hovered
     tracks: [
       { name: "What it does", text: "Upload your PDFs, ask questions in any language, and get answers based on your own documents." },
       { name: "The tricky part", text: "Getting answers to stick to the uploaded documents instead of the model making things up. Chunking the text and searching with pgvector took most of the tuning." },
       { name: "What I learned", text: "How retrieval works end to end: embeddings, vector search, and feeding the right context to Gemini." },
     ],
-    cover: { color: "#3b4a5a", motif: "document" },
+    cover: { color: "#141414", ink: "#ece6d6", label: "#e4e1da", labelInk: "#111111", border: true, motif: "document" },
     side: "A",
     year: 2026,
     description:
@@ -29,13 +32,13 @@ export const projects = [
   {
     title: "Expense Tracker",
     slug: "expense-tracker",
-    shortTitle: "Expense Tracker", // the landing page tracklist
+    shortTitle: "Expense Tracker", // the label under a sleeve when it is hovered
     tracks: [
       { name: "What it does", text: "Log what you spend, see where it goes, and keep track of your budget for the month." },
       { name: "The tricky part", text: "Designing the data model so categories and monthly summaries stay simple to query." },
       { name: "What I learned", text: "Building a full app from scratch: React frontend, a Django REST API, PostgreSQL, and deploying it." },
     ],
-    cover: { color: "#4a5a3f", motif: "bars" },
+    cover: { color: "#2b2b2b", ink: "#ece6d6", border: true, motif: "bars" },
     side: "A",
     year: 2026,
     description:
@@ -49,13 +52,13 @@ export const projects = [
   {
     title: "JobCompass",
     slug: "jobcompass",
-    shortTitle: "JobCompass", // the landing page tracklist
+    shortTitle: "JobCompass", // the label under a sleeve when it is hovered
     tracks: [
       { name: "What it does", text: "Reads a job ad and tells you whether to apply, tailor your application, or skip." },
       { name: "The tricky part", text: "Turning messy job ad text into clear rules, like spotting \"PR or citizens only\", and checking the results against a holdout dataset instead of just trusting them." },
       { name: "What I learned", text: "A rule-based engine is easier to explain and debug than a black box. I built the whole app myself, and a teammate prepared the ground-truth dataset." },
     ],
-    cover: { color: "#6b4a3a", motif: "compass" },
+    cover: { color: "#4a4a4a", ink: "#ece6d6", border: false, motif: "compass" },
     side: "A",
     year: 2026,
     description:
@@ -69,13 +72,13 @@ export const projects = [
   {
     title: "Discord Music Bot",
     slug: "music-bot",
-    shortTitle: "Music Bot", // the landing page tracklist
+    shortTitle: "Music Bot", // the label under a sleeve when it is hovered
     tracks: [
       { name: "What it does", text: "Plays YouTube links in voice chat with a queue, plus play, pause, resume, skip and stop commands." },
       { name: "The tricky part", text: "Streaming audio live: yt-dlp feeds ffmpeg, which converts it to raw audio for @discordjs/voice. The bot also needs a separate queue for each server." },
       { name: "What I learned", text: "Working with audio streams and the Discord voice API, and building something my friends actually use." },
     ],
-    cover: { color: "#5a3f55", motif: "wave" },
+    cover: { color: "#e4e1da", ink: "#111111", border: false, motif: "wave" },
     side: "B",
     year: 2025,
     description:

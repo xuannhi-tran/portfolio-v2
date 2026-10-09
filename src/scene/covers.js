@@ -1,4 +1,6 @@
 import * as THREE from "three";
+import { sideColor } from "./sleeve.js";
+import { SLEEVE_BORDER } from "./tweaks.js";
 
 const INK = "#ece6d6";
 
@@ -23,7 +25,8 @@ export async function renderCoverTexture(template, { size = 1024, anisotropy = 1
   svg.setAttribute("xmlns", "http://www.w3.org/2000/svg");
   svg.setAttribute("width", size);
   svg.setAttribute("height", size);
-  svg.style.color = INK; // motifs use currentColor
+  const ink = template.dataset.ink || INK;
+  svg.style.color = ink; // motifs use currentColor
 
   const url = URL.createObjectURL(
     new Blob([new XMLSerializer().serializeToString(svg)], { type: "image/svg+xml" }),
@@ -48,7 +51,7 @@ export async function renderCoverTexture(template, { size = 1024, anisotropy = 1
   const k = size / 200; // SVG viewBox is 200 x 200
   ctx.drawImage(img, 0, 0, size, size);
 
-  ctx.fillStyle = INK;
+  ctx.fillStyle = ink;
   ctx.textBaseline = "alphabetic";
 
   if (labelText) {
@@ -82,11 +85,15 @@ export async function renderEdgeTexture(cover, { size = 1024, anisotropy = 1 } =
   canvas.height = height;
   const ctx = canvas.getContext("2d");
 
-  const base = new THREE.Color(cover.color).multiplyScalar(0.5);
-  ctx.fillStyle = `#${base.getHexString()}`;
+  ctx.fillStyle = `#${sideColor(cover.color).getHexString()}`;
   ctx.fillRect(0, 0, width, height);
+  if (cover.border) {
+    ctx.strokeStyle = SLEEVE_BORDER;
+    ctx.lineWidth = Math.max(1, 4 * (size / 1024));
+    ctx.strokeRect(ctx.lineWidth / 2, ctx.lineWidth / 2, width - ctx.lineWidth, height - ctx.lineWidth);
+  }
 
-  ctx.fillStyle = INK;
+  ctx.fillStyle = cover.ink || INK;
   ctx.textBaseline = "middle";
   ctx.font = `500 ${38 * k}px "IBM Plex Mono", monospace`;
   if ("letterSpacing" in ctx) ctx.letterSpacing = `${2 * k}px`;

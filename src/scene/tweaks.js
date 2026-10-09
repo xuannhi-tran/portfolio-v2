@@ -120,7 +120,8 @@ export const DIM_AMOUNT = 0.5; // how much the other sleeves darken while one is
 export const AMBIENT = 0.1;
 export const KEY = { intensity: 2, offset: [-3, 5, 2.5] }; // offsets are from the turntable; shadows follow it
 export const FILL = { intensity: 0.4, offset: [3, 3, -1.5] };
-export const RIM = { intensity: 1, offset: [2, 6, -3.5], color: 0xcfd9ff };
+export const RIM = { intensity: 1, offset: [2, 6, -3.5], color: 0xffffff }; // neutral: the site is black and white
+export const SLEEVE_BORDER = "rgba(255,255,255,0.18)"; // the thin outline on the darkest sleeves (see cover.border in src/projects.js)
 export const ENV_INTENSITY = 0.3; // RoomEnvironment reflections (higher = shinier, greyer)
 
 // The pick-a-record sequence. `at` = start time (s), `duration` = length (s).
@@ -141,7 +142,28 @@ export const TIMING = {
   spin: { at: 2.95, duration: 0.8 }, // platter spins up to the calm speed
   panel: { at: 3.05, duration: 0.55 }, // the info panel fades / slides in once the record is seated and the platter is turning (and out first when it is ejected)
 };
+// The same sequence for a pick from the row, in beats that never overlap on screen (see ROW). Times in seconds.
+export const TIMING_ROW = {
+  out: { at: 0, duration: 0.25 }, // the other sleeves fade out, drifting down; the chosen one lifts
+  bob: { at: 0, duration: 0.3 },
+  slide: { at: 0.22, duration: 0.36 }, // the record slides out of the standing sleeve
+  leave: { at: 0.58, duration: 0.15 }, // then the empty sleeve fades
+  settle: { at: 0.58, duration: 0.3 }, // (its hover lift goes with it)
+  camera: { at: 0.73, duration: 0.001 }, // nothing else is on screen: the camera cuts to the playing / showcase view
+  table: { at: 0.73, duration: 0.35 }, // the turntable fades in where it ends up
+  arc: { at: 0.73, duration: 0.6 }, // the record flies to it
+  stack: { at: 1.0, duration: 0.3 }, // the stack on the left fades in, sliding in from the left
+  lower: { at: 1.33, duration: 0.2 },
+  needle: { at: 1.45, duration: 0.4 },
+  spin: { at: 1.6, duration: 0.4 },
+  panel: { at: 1.3, duration: 0.45 }, // the info panel and its tracklist
+  frame: { at: 1.25, duration: 0.7 }, // the demo frame grows in
+};
 export const EASE = {
+  table: "power2.out",
+  out: "power1.out",
+  stack: "power2.out",
+  frame: "power3.out",
   bob: "power1.out",
   settle: "power2.out",
   dim: "power2.out",
@@ -206,4 +228,38 @@ export const HERO = {
   riseBy: 22, // px the text rises
   recordDuration: 0.95, // s, the record sliding in
   recordShift: 90, // px it slides in from
+};
+
+// ROW: the Projects section of the landing page. The sleeves lie in one row (a 2 x 2 grid on narrow screens),
+// one front-facing sleeve per project. When the section scrolls into view they spread out from a pile
+// once (a tween, not scrubbed by scroll); when it leaves, the canvas fades out. Distances are world units
+// (a sleeve is 2 wide); times are seconds.
+export const ROW = {
+  stepX: 2.7, // distance between sleeve centres in the row
+  stepCompact: 2.6, // ...in the 2 x 2 grid on narrow screens
+  offsetY: 0, // shift the row up (+) or down (-), in world units
+  bottomMargin: 48, // px: the row is centred between the heading and this far above the bottom of the visible section
+  gapBelowHeading: 64, // px between the "Pick a record" label and the top of the row (it follows the heading, whatever the scroll)
+  fillWidth: 0.84, // the row takes this share of the viewport width...
+  fillHeight: 0.62, // ...and (2 x 2 grid) at most this share of its height
+  maxSleevePx: 340, // a sleeve is never bigger than this on screen
+  thin: 0.35, // standing sleeves are this fraction of the full thickness (the pile and the stack keep full thickness)
+  hoverLiftY: 0.28, // a hovered / focused sleeve rises this much...
+  hoverLiftZ: 0.1, // ...and comes this far towards the camera
+  labelGap: 14, // px between a sleeve's bottom edge and its hover label
+  stagger: 0.06, // s between one sleeve and the next
+  duration: 0.8, // s, each sleeve spreading out from the pile
+  ease: "power3.out",
+  enterAt: 0.6, // the canvas shows (and the row spreads out) once this much of the section is on screen...
+  leaveAt: 0.35, // ...and fades out when less than this is
+  fadeOut: 0.3, // s
+  // Picking a sleeve from the row (see TIMING_ROW): the other three fade out where they stand, drifting down a little;
+  // the record slides out of the chosen one, which then fades too; with nothing else on screen the camera cuts to the
+  // playing / showcase view, the turntable fades in, the record flies to it and the stack on the left fades in.
+  fadeDrift: 0.25, // world units the other sleeves sink while they fade out (and rise from when they come back)
+  pickLift: 0.12, // world units the chosen sleeve rises as the others fade
+  stackSlidePx: 40, // the stack on the left slides in from this far to the left as it fades in
+  swapAt: 0.2, // s into a pick from the row where the record is still in its sleeve: a swap plays back to here
+  backFade: 0.3, // s, after a swapped record is ejected: the stack fades out, then the row fades back in
+  ejectSpeed: 1.5, // Back / Escape plays the timeline backwards this much faster than it went forwards
 };
