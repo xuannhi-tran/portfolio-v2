@@ -119,7 +119,7 @@ body {
 }
 
 .hero-line {
-  max-width: 32rem;
+  max-width: 38rem;
   font-size: 1.25rem;
   line-height: 1.5;
   color: #ededed;
@@ -452,9 +452,15 @@ html.no-bg .shelf::before {
   color: var(--heading);
 }
 
-@media (max-width: 47.99rem) {
+/* Below 1100px the title starts at the content edge, like the rule and everything under it (no offset to column 5) */
+@media (max-width: 1099.98px) {
   .section-head {
     display: block;
+  }
+}
+
+@media (max-width: 47.99rem) {
+  .section-head {
     margin-bottom: 1.75rem;
   }
 
@@ -469,24 +475,133 @@ html.no-bg .shelf::before {
   margin-bottom: 1rem;
 }
 
-/* The small row at the bottom of the first screen: the last row of the hero, so it is always pinned to the bottom of the first
-   screen and can never overlap the text. Same side margins as the hero text (see .hero-copy). */
+/* The availability pill above the name: a soft pulsing dot (static with reduced motion) */
+.hero-badge {
+  display: inline-flex;
+  width: fit-content;
+  white-space: nowrap; /* sizes to its text, one line */
+  align-items: center;
+  gap: 0.6rem;
+  margin: 0 0 0.25rem; /* with the column's gap: about 1.25rem above the name */
+  padding: 0.45rem 0.9rem;
+  border: 1px solid rgba(255, 255, 255, 0.35);
+  border-radius: 999px;
+  font-family: var(--mono);
+  font-size: 13px;
+  letter-spacing: 0.08em;
+  line-height: 1.2;
+  text-transform: uppercase;
+  color: #e6e6e6;
+}
+
+.hero-badge-dot {
+  flex: none;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #fff;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .hero-badge-dot {
+    animation: badge-pulse 2.4s ease-out infinite;
+  }
+}
+
+@keyframes badge-pulse {
+  0% {
+    box-shadow: 0 0 0 0 rgba(255, 255, 255, 0.55);
+  }
+  70%,
+  100% {
+    box-shadow: 0 0 0 9px rgba(255, 255, 255, 0);
+  }
+}
+
+/* Narrower windows: the pill shrinks a little so it stays on one line beside the record */
+@media (max-width: 1099.98px) {
+  .hero-badge {
+    gap: 0.5rem;
+    padding: 0.4rem 0.75rem;
+    font-size: 11px;
+    letter-spacing: 0.05em;
+  }
+}
+
+/* The strip at the bottom of the first screen: the last row of the hero, so it is pinned to the bottom of the first screen and can
+   never overlap the text. Three columns (LOCATION, BUILT WITH, GET IN TOUCH), same side margins as the hero text (see .hero-copy). */
 .hero-foot {
   position: relative;
   z-index: 1;
-  display: flex;
-  justify-content: space-between;
-  gap: 1rem;
+  display: grid;
+  grid-template-columns: repeat(var(--cols, 3), minmax(0, 1fr));
+  gap: clamp(1.5rem, 3vw, 3rem);
   margin: 0 clamp(1.5rem, 6vw, 6rem);
   padding: 1rem 0 28px;
   border-top: 1px solid var(--rule);
-  font-size: clamp(13px, 1.05vw, 15px);
-  color: #b5b5b5;
+  list-style: none;
 }
 
-.hero-foot-end {
-  margin-left: auto;
-  text-align: right;
+.hero-foot-item {
+  min-width: 0;
+}
+
+.hero-foot-item .label {
+  display: block;
+  margin-bottom: 0.35rem;
+  font-size: 12px;
+  color: #8a8a8a;
+}
+
+.hero-foot-value {
+  display: block;
+  font-size: clamp(18px, 1.6vw, 24px);
+  line-height: 1.25;
+  color: #d9d9d9;
+}
+
+.hero-foot-value .nb {
+  white-space: nowrap;
+}
+
+.hero-foot-link {
+  overflow-wrap: anywhere;
+  text-decoration: underline;
+  text-decoration-thickness: 1px;
+  text-decoration-color: rgba(255, 255, 255, 0.25);
+  text-underline-offset: 0.2em;
+}
+
+.hero-foot-arrow {
+  display: inline-block;
+  margin-left: 0.25em;
+  font-size: 0.7em;
+  vertical-align: 0.15em;
+}
+
+.hero-foot-link:hover,
+.hero-foot-link:focus-visible {
+  color: #fff;
+  text-decoration-color: #fff;
+}
+
+.hero-foot-link:focus-visible {
+  outline: 2px solid var(--text);
+  outline-offset: 4px;
+}
+
+@media (max-width: 47.99rem) {
+  .hero-foot {
+    grid-template-columns: 1fr;
+    gap: 0;
+    border-top: 0;
+    padding-bottom: 20px;
+  }
+
+  .hero-foot-item {
+    padding: 0.9rem 0;
+    border-top: 1px solid var(--rule);
+  }
 }
 
 /* Fixed nav */
@@ -644,15 +759,74 @@ h2 {
 }
 
 .row-body {
+  --thumb-w: clamp(200px, 24vw, 320px);
   display: grid;
-  gap: 0.75rem;
-  max-width: 44rem;
+  grid-template-columns: minmax(0, 44rem) var(--thumb-w); /* the text takes what is left (up to 44rem), the thumbnail its own width */
+  justify-content: space-between;
+  grid-auto-flow: row dense;
+  column-gap: 2rem;
+  row-gap: 0.75rem;
   margin-top: 0.75rem;
   padding-left: 3.5rem; /* under the title: the number's width plus the gap */
 }
 
 .row-body > * {
   margin: 0;
+  grid-column: 1;
+}
+
+/* The thumbnail: the whole picture at its own shape, in the right column, level with the SIDE label; the right edge is the row's */
+.row-thumb {
+  grid-column: 2;
+  grid-row: 1 / span 4;
+  align-self: start;
+  display: block;
+  width: 100%;
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  border-radius: 2px;
+  overflow: hidden;
+  line-height: 0;
+}
+
+.row-thumb-img {
+  display: block;
+  width: 100%;
+  height: auto;
+  filter: grayscale(1) brightness(0.9) contrast(1.05); /* the white page of one screenshot does not glare against the black */
+}
+
+a.row-thumb:focus-visible {
+  outline: 2px solid var(--text);
+  outline-offset: 4px;
+}
+
+.row-body.no-thumb {
+  grid-template-columns: minmax(0, 44rem);
+}
+
+.row-body.no-thumb .row-thumb {
+  display: none;
+}
+
+@media (max-width: 47.99rem) {
+  /* Stacked: title and meta (the head), description, the thumbnail across the width, then the links and the notes */
+  .row-body,
+  .row-body.no-thumb {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .row-thumb {
+    grid-column: 1;
+    grid-row: auto;
+    justify-self: stretch;
+    width: 100%;
+    order: 3;
+  }
+
+  .row-side { order: 1; }
+  .row-desc { order: 2; }
+  .row-links { order: 4; }
+  .row-more { order: 5; }
 }
 
 .row-desc {
@@ -668,23 +842,110 @@ h2 {
   font-size: 1rem;
 }
 
-.row-more summary {
-  display: inline-block;
+.row-more {
+  interpolate-size: allow-keywords; /* (lets the notes open and close with a height transition where the browser supports it) */
+}
+
+/* "More information": a real <summary> (Space / Enter work) styled as an outline pill like the Live demo / Repo pills of the record panel.
+   The label swaps with the state in CSS (both texts are in the page, one is display: none, so the accessible name follows the state);
+   the plus becomes a minus when open. */
+.row-more {
+  margin-top: 0.25rem; /* (the row's own gap makes it about 1rem under the links) */
+}
+
+.row-more summary.more-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.6em;
   min-height: 44px;
-  padding: 0.6rem 0;
+  padding: 0.6rem 1.1rem;
+  border: 1px solid rgba(255, 255, 255, 0.35);
+  border-radius: 999px;
+  background: none;
+  color: #d9d9d9;
+  font-family: var(--mono);
+  font-size: 13px;
+  letter-spacing: 0.06em;
+  line-height: 1.2;
+  list-style: none;
   cursor: pointer;
+  user-select: none;
 }
 
-.row-more summary:focus-visible {
+.row-more summary.more-btn::-webkit-details-marker {
+  display: none;
+}
+
+.row-more summary.more-btn::marker {
+  content: "";
+}
+
+.more-open,
+.row-more[open] .more-closed {
+  display: none;
+}
+
+.row-more[open] .more-open {
+  display: inline;
+}
+
+.row-more summary.more-btn:hover,
+.row-more summary.more-btn:focus-visible {
+  border-color: #fff;
+  background: rgba(255, 255, 255, 0.06);
+  color: #fff;
+}
+
+.row-more[open] summary.more-btn {
+  border-color: rgba(255, 255, 255, 0.6);
+}
+
+.row-more summary.more-btn:focus-visible {
   outline: 2px solid var(--text);
-  outline-offset: 4px;
+  outline-offset: 2px;
 }
 
-.row-more[open] summary {
-  margin-bottom: 0.5rem;
+.more-icon {
+  flex: none;
+  overflow: visible;
 }
 
-@media (max-width: 47.99rem) {
+.more-v {
+  transform-origin: 6px 6px;
+}
+
+.row-more[open] .more-v {
+  transform: scaleY(0); /* the plus loses its upright: a minus */
+}
+
+.row-more[open] summary.more-btn {
+  margin-bottom: 1rem;
+}
+
+.row-tracks {
+  margin: 0 0 0.5rem;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .more-v,
+  .row-more summary.more-btn {
+    transition: transform 0.15s ease, color 0.15s ease, border-color 0.15s ease, background-color 0.15s ease;
+  }
+
+  @supports selector(::details-content) {
+    .row-more::details-content {
+      height: 0;
+      overflow: hidden;
+      transition: height 0.25s ease, content-visibility 0.25s allow-discrete;
+    }
+
+    .row-more[open]::details-content {
+      height: auto;
+    }
+  }
+}
+
+@media (max-width: 56rem) {
   .row-head {
     flex-wrap: wrap;
     gap: 0.1rem 1rem;
@@ -729,8 +990,127 @@ h2 {
   margin: 0 0 1.25rem;
 }
 
-.page-section .links {
-  margin: 0 0 1.5rem;
+/* Contact: a column per entry under the rule (same width as the heading's rule), then the CV button under the first one */
+.contact-grid,
+.contact-cv {
+  width: var(--head-w);
+  margin-left: calc(50% - var(--head-w) / 2);
+}
+
+.contact-grid {
+  display: grid;
+  grid-template-columns: repeat(var(--cols, 3), minmax(0, 1fr));
+  gap: clamp(1.5rem, 3vw, 3rem);
+  margin-top: 0;
+  margin-bottom: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.contact-item {
+  min-width: 0;
+  container-type: inline-size; /* the value is sized from the column's own width (cqw), so it always fits on one line */
+  padding-top: 1.25rem;
+  border-top: 1px solid var(--rule);
+}
+
+.contact-item .label {
+  display: block;
+  margin-bottom: 0.9rem;
+  color: #b5b5b5;
+}
+
+.contact-link {
+  font-size: clamp(16px, 8cqw, 40px); /* "linkedin.com/in/xuannhi-tran" + arrow is about 12em wide: 8cqw leaves room to spare */
+  line-height: 1.15;
+  color: var(--heading);
+  white-space: nowrap; /* the text and its arrow never break apart */
+  text-decoration: underline;
+  text-decoration-thickness: 1px;
+  text-decoration-color: rgba(255, 255, 255, 0.25);
+  text-underline-offset: 0.2em;
+}
+
+.contact-arrow {
+  display: inline-block;
+  margin-left: 0.25em;
+  font-size: 0.7em;
+  vertical-align: 0.15em;
+}
+
+.contact-link:hover,
+.contact-link:focus-visible {
+  color: #fff;
+  text-decoration-color: #fff;
+}
+
+.contact-link:focus-visible {
+  outline: 2px solid var(--text);
+  outline-offset: 6px;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .contact-link,
+  .contact-arrow {
+    transition: color 0.2s, text-decoration-color 0.2s, transform 0.2s;
+  }
+
+  .contact-link:hover .contact-arrow,
+  .contact-link:focus-visible .contact-arrow {
+    transform: translate(3px, -3px);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .contact-link:hover .contact-arrow,
+  .contact-link:focus-visible .contact-arrow {
+    transform: translate(3px, -3px); /* a position, not an animation */
+  }
+}
+
+.contact-cv .button {
+  margin-top: clamp(2rem, 4vw, 3.5rem);
+  padding: 0.95rem 1.9rem;
+  font-family: var(--mono);
+  font-size: 15px;
+  letter-spacing: 0.04em;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.6em;
+}
+
+.cv-arrow {
+  display: inline-block;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .cv-arrow {
+    transition: transform 0.15s ease;
+  }
+
+  .contact-cv .button:hover .cv-arrow,
+  .contact-cv .button:focus-visible .cv-arrow {
+    transform: translateY(3px);
+  }
+}
+
+@media (max-width: 47.99rem) {
+  .contact-grid {
+    grid-template-columns: 1fr;
+    gap: 0;
+  }
+
+  .contact-item {
+    padding: 1rem 0 1.25rem;
+  }
+
+  .contact-item .label {
+    margin-bottom: 0.5rem;
+  }
+
+  .contact-link {
+    font-size: clamp(20px, 8cqw, 28px);
+  }
 }
 
 /* About: a landscape album sleeve (light, with four tiles in a monochrome collage) and a record peeking out
@@ -938,6 +1318,11 @@ h2 {
   bottom: -1.6rem;
 }
 
+/* the bar drawing sits in the bottom corner: the longer text ends above it */
+.about-tile--build {
+  padding-bottom: 5.6rem;
+}
+
 /* Sheet music: staves, a clef and a few notes, tilted and cropped by the tile (white strokes on the charcoal) */
 .about-tile--outside .about-motif--staff {
   top: -2.4rem;
@@ -1126,6 +1511,10 @@ h2 {
     padding: 22px;
   }
 
+  .about-tile.about-tile--build {
+    padding-bottom: 5.2rem; /* (the bar drawing is a little smaller here) */
+  }
+
   .about-tile p {
     font-size: 1.03rem;
   }
@@ -1164,7 +1553,7 @@ h2 {
 /* Record shelf: the Projects section of the landing page */
 .shelf {
   max-width: 44rem;
-  min-height: 100svh;
+  min-height: min(100svh, 46rem); /* the content decides on tall screens (the crate's column keeps it tall enough for an open record) */
   margin: 0 auto;
   padding: 5rem 1.5rem 4rem;
   scroll-margin-top: 0;
@@ -1189,7 +1578,8 @@ h2 {
   margin-top: 2rem;
 }
 
-@media (min-width: 48rem) {
+/* Side by side only in landscape windows wider than the narrow breakpoint (the opposite of COMPACT.query) */
+@media (min-width: 48.01rem) and (min-aspect-ratio: 1001/1000) {
   .shelf-layout {
     grid-template-columns: minmax(0, 0.8fr) minmax(0, 1.2fr);
     gap: 3rem;
@@ -1198,6 +1588,14 @@ h2 {
 
   .shelf-layout .crate {
     grid-column: 2;
+  }
+}
+
+/* Stacked: one centred column, as wide as a turntable of min(70vw, 460px) needs (COMPACT.tableFit = 0.88) */
+@media (max-width: 48rem), (max-aspect-ratio: 1/1) {
+  .shelf-layout .crate {
+    width: min(100%, 70vw / 0.88, 460px / 0.88);
+    margin-inline: auto;
   }
 }
 
@@ -1353,7 +1751,8 @@ h2 {
   fill: currentColor;
 }
 
-@media (max-width: 48rem) {
+/* The stacked open-record layout (narrow or portrait windows, COMPACT.query in tweaks.js) */
+@media (max-width: 48rem), (max-aspect-ratio: 1/1) {
   .shelf[data-state="playing"] .thumbs {
     position: absolute;
     top: 58%; /* of the crate's height: just below the turntable */
@@ -1475,7 +1874,124 @@ h2 {
 
 .shelf-status {
   min-height: 1.5em;
+  margin: 0;
+}
+
+/* The mini player: the "Now playing" line, a decorative progress bar and pause / previous / next (src/shelf.js). In the page flow
+   after the panel on stacked layouts; placed under the demo frame (absolute, by placeFrame) on side-by-side ones. It only shows
+   with a record open, and fades with the panel (--player-o). */
+.player {
   margin: 2rem 0 0.5rem;
+  opacity: var(--player-o, 0);
+}
+
+.shelf[data-state="stack"] .player {
+  display: none;
+}
+
+.player.is-placed {
+  position: absolute;
+  z-index: 2;
+  margin: 0;
+}
+
+.player-bar {
+  position: relative;
+  height: 3px;
+  margin: 0.8rem 0 0.4rem; /* as wide as the player (the frame, or the content column) */
+  border-radius: 2px;
+  background: rgba(255, 255, 255, 0.18);
+}
+
+.player-fill {
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: 0;
+  border-radius: inherit;
+  background: var(--heading);
+  animation: player-sweep var(--player-loop, 30s) linear infinite;
+}
+
+.player-fill::after {
+  content: "";
+  position: absolute;
+  top: 50%;
+  right: -4.5px;
+  width: 9px;
+  height: 9px;
+  margin-top: -4.5px;
+  border-radius: 50%;
+  background: var(--heading);
+}
+
+.player.is-paused .player-fill {
+  animation-play-state: paused;
+}
+
+@keyframes player-sweep {
+  from {
+    width: 0;
+  }
+  to {
+    width: 100%;
+  }
+}
+
+.player-controls {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: clamp(1rem, 3vw, 2rem);
+}
+
+.player-btn {
+  display: grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: none;
+  color: var(--heading);
+  cursor: pointer;
+  pointer-events: auto;
+  transition: color 0.2s, border-color 0.2s;
+}
+
+.player-btn svg {
+  width: 22px;
+  height: 22px;
+}
+
+.player-toggle {
+  border: 1px solid var(--heading);
+}
+
+.player-btn:hover {
+  color: #fff;
+  border-color: #fff;
+}
+
+.player-btn:focus-visible {
+  outline: 2px solid var(--text);
+  outline-offset: 3px;
+}
+
+.player-toggle .icon-play,
+.player-toggle[aria-pressed="true"] .icon-pause {
+  display: none;
+}
+
+.player-toggle[aria-pressed="true"] .icon-play {
+  display: block;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .player-fill {
+    animation: none;
+  }
 }
 
 /* "Pick a record" on the left, the Records / List toggle on the right, under the heading */
@@ -1544,6 +2060,23 @@ html.no-3d .mode-toggle {
 
 .shelf-body > .shelf-layout {
   margin-top: 0;
+}
+
+/* Browsing: the section is only as tall as the row and its captions (the scene sets --row-h; the 2 x 2 grid on narrow screens needs more than the crate's column, the row on wide ones less). The crate's column is taller
+   (the open record needs it) and simply reaches past; it is given back when a record is picked. */
+/* An open record needs the whole screen: the turntable and the record are placed by fractions of the window's height, so the
+   section (and with it the canvas' clip) has to be at least as tall as the window */
+.shelf:not([data-state="stack"]) {
+  min-height: max(100svh, var(--open-h, 0px)); /* --open-h: the scene measures how far below the crate's centre the window's bottom is */
+}
+
+.shelf[data-state="stack"] .shelf-layout {
+  height: var(--row-h, auto);
+}
+
+/* (on narrow screens the info panel is pulled up under the turntable by a negative margin: not while browsing) */
+.shelf[data-state="stack"] .info {
+  margin-top: 0 !important;
 }
 
 .shelf-body > .is-measure,
@@ -1619,14 +2152,12 @@ html.mode-switching {
   color: #cfcfcf;
 }
 
-/* The screenshot only shows in the panel on narrow screens (the demo frame shows it on wide ones) */
+/* The screenshot only shows in the panel on narrow screens (the demo frame shows it on wide ones). Never cropped: it keeps its
+   own shape (the width / height attributes come from the file at build time, so the space is reserved before it loads). */
 .shot {
   display: block;
   width: 100%;
   height: auto;
-  aspect-ratio: 16 / 10;
-  object-fit: cover;
-  object-position: top;
   border: 1px solid var(--line);
   border-radius: 0.5rem;
 }
@@ -1837,6 +2368,25 @@ html.mode-switching {
   position: absolute;
   inset: 0;
   z-index: 2;
+  overscroll-behavior: contain; /* a wheel at the end of the app's own scroll does not chain into the page */
+}
+
+/* Switching records with one open (the turntable stays): the frame, the player and the panel fade out at once and come back after
+   the new record is playing (src/shelf.js, times: SWAP_IN_PLACE in tweaks.js) */
+.shelf.is-swapping :is(.demo-frame, .info, .player) {
+  opacity: 0 !important;
+  visibility: hidden !important; /* (after the fade: nothing of the new record's content can show, not even faintly) */
+  pointer-events: none !important;
+  transition: opacity var(--swap-out, 0.3s) ease, visibility 0s linear var(--swap-out, 0.3s) !important;
+}
+
+.shelf.is-swap-in :is(.demo-frame, .info, .player) {
+  transition: opacity var(--swap-in, 0.4s) ease, visibility 0s;
+}
+
+/* With a record open the Projects section (frame, panel, player) is above the sections that follow it, so nothing of About can paint over them */
+.shelf:not([data-state="stack"]) {
+  z-index: 1;
 }
 
 .demo-live[hidden] {
@@ -2000,30 +2550,19 @@ html.shelf-locked {
   overflow: hidden;
 }
 
-/* The list view shows the same notes, with the screenshot above them */
-.card-shot {
-  margin: 0.25rem 0;
-}
-
-.card-tracks {
-  margin: 0.25rem 0 0.25rem;
-  padding: 0;
-  list-style: none;
-  display: grid;
-  gap: 0.5rem;
-  font-size: 0.95rem;
-  line-height: 1.4;
-  color: #b4b4b4;
-}
-
-.card-tracks .label {
-  display: block;
-}
-
-/* Narrow screens: no showcase. The screenshot sits above a plain list of notes. */
-@media (max-width: 48rem) {
+/* The list mode's notes (inside the row's <details>) */
+/* The stacked layout (narrow or portrait windows): no showcase. The screenshot sits above a plain list of notes. */
+@media (max-width: 48rem), (max-aspect-ratio: 1/1) {
   .demo-frame {
     display: none;
+  }
+
+  /* The "All records" pill is not sticky here (it would cover the thumbnails and the text as the page scrolls): it sits at the
+     top of the turntable's column and scrolls with it (--pill-top, src/shelf.js placePanel) */
+  .shelf:not([data-state="stack"]) .shelf-top {
+    position: absolute;
+    top: var(--pill-top, 0);
+    left: 1.5rem;
   }
 
   .info {

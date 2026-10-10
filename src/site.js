@@ -6,7 +6,10 @@ export const site = {
   linkedin: "https://www.linkedin.com/in/xuannhi-tran",
   cv: "/assets/CV_Resume.pdf",
   cvFileName: "Vo_Xuan_Nhi_Tran_CV.pdf",
-  // The small row at the bottom of the first screen (left / right). An empty value hides that item.
+  // The first screen. An empty value leaves that part out.
+  heroTagline: "I build full-stack web apps, from the database to the interface. Currently looking for a software engineering internship.",
+  heroStatus: "Open to software internships", // the pill above the name
+  // The strip at the bottom: LOCATION, BUILT WITH, GET IN TOUCH (the email above). An empty value omits that column.
   heroLocation: "Sydney, AU",
-  heroStatus: "Open to internships",
+  heroStack: "React · FastAPI · Django · Next.js · PostgreSQL",
 };

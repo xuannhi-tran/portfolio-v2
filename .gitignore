@@ -22,3 +22,6 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+
+# Dev check output (scripts/dev/check-layout.mjs): its browser profile and screenshots
+.tmp/

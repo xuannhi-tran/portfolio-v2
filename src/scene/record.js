@@ -245,6 +245,7 @@ export function createRecord(project, { grooveTexture = createGrooveTexture() } 
   };
 
   // Vinyl turns clockwise seen from above, which is negative rotation about +Y.
+  group.angle = () => spinner.rotation.y; // (dev: lets a test see the record turn)
   group.spin = (dt, speed = 1) => {
     spinner.rotation.y -= RECORD_ANGULAR_SPEED * speed * dt;
   };

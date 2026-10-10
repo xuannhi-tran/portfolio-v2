@@ -44,3 +44,7 @@ Navigation: a **fixed nav** so visitors can skip the animation, plus a button to
 - All site copy in **English**.
 - Natural and conversational tone.
 - **No overstating skills.** Describe what was actually built and learned, honestly.
+
+## Layout check
+
+Day to day: `CHECK=<group> node scripts/dev/check-layout.mjs http://localhost:5173 --quick` (groups: `--list`; add `--shots` for screenshots, `ONLY=960x1440` for a size). Full run (all sizes, all groups) only before a commit.

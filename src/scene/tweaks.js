@@ -36,12 +36,19 @@ export const PLAYING_LAYOUT = {
   tableX: 0.52,
   offsetY: 0, // px: nudge the whole playing picture down (+) or up (-)
 };
-// Narrow screens (matches the CSS breakpoint): the turntable fills the top of the stack's
-// column and the other records are HTML thumbnails below it, so there is no 3D stack.
+// The stacked open-record layout (matches the CSS media queries): narrow screens and any portrait window. The turntable sits
+// centred at the top of the column and the other records are HTML thumbnails below it, so there is no 3D stack. The column is
+// min(70vw, 460px) / tableFit wide (style.css), so the turntable is about min(70vw, 460px).
 export const COMPACT = {
-  query: "(max-width: 48rem)",
+  query: "(max-width: 48rem), (max-aspect-ratio: 1/1)",
+  gridQuery: "(max-width: 48rem)", // the row of sleeves becomes a 2 x 2 grid only on narrow screens
   tableFit: 0.88, // turntable width as a fraction of the column width
-  centreY: 0.5, // turntable centre, as a multiple of the column width below the column's top
+  centreY: 0.36, // turntable centre, as a multiple of the column width below the column's top (its top edge then sits just
+  // under the "All records" button once the pick has scrolled the column to the top of the window)
+  topSpace: 48, // px at the column's top for the "All records" pill (the turntable and everything under it start below it)
+  playerAt: 0.72, // the mini player starts this far below the column's top (just under the turntable), as a multiple of its width
+  playerGap: 16, // px between the player and the row of the other records' thumbnails
+  pillOffset: 4, // px: the "All records" pill sits this far below the column's top (above the turntable)
 };
 export const LEAVE_OFFSET = 1.8; // the played sleeve slides this far to the LEFT (away from the turntable) while it fades out
 
@@ -68,12 +75,10 @@ export const COLLAPSED_STACK = {
 // bottom-left corner, partly cropped by the screen edge, like a big record peeking in from the side.
 // A placeholder "browser window" frame grows in from the right (between the left stack and the info
 // panel, never overlapping the panel). Wide screens only; narrow screens keep the stacked layout.
-// On eject or swap the showcase plays backwards first, then the normal sequence runs.
+// Eject and swap never play it backwards: the turntable stays where it is.
 export const SHOWCASE = {
   duration: 1.2, // s, entering
   ease: "power3.inOut",
-  exitDuration: 0.6, // s, leaving (before an eject / swap starts)
-  exitEase: "power2.inOut",
   pitch: 80, // apparent viewing angle of the turntable at the end (90 = straight down)
   scale: 0.9, // turntable size relative to the normal playing layout
   anchor: { x: 0.1, y: 0.9 }, // where the platter centre ends up, as fractions of the viewport (0,0 = top left)
@@ -98,7 +103,7 @@ export const SHOWCASE = {
 // is cropped), clamped between minAspect and maxAspect (width / height); SHOWCASE.frame.aspect is the fallback.
 export const DEMO_IMAGE = {
   minAspect: 4 / 3,
-  maxAspect: 2,
+  maxAspect: 2.2, // (the widest screenshot, rag.png, is 2.02: it must fit without bars)
   fade: 0.3, // s, crossfade between screenshots
 };
 // LIVE_DEMO: the "Try it live" button in the demo frame mounts the project's real site in an iframe
@@ -190,6 +195,27 @@ export const PANEL = {
 // both sped up by this factor (3.75 s x 2 / 2.5 = 3 s in total).
 export const SWAP_SPEED = 2.5;
 
+// Picking another record while one is open (the showcase on screen, or the stacked layout): the turntable does not move. In order:
+//   1. the frame, the player and the panel fade out (fadeOut)
+//   2. a short beat (beat), then the tonearm lifts and the current record slides back into its sleeve (back)
+//   3. a gap with only the empty platter (gap)
+//   4. the new record slides out onto the platter and the tonearm lowers (forward, eased in and out)
+//   5. once it is playing, the frame, the player and the panel fade back in (fadeIn)
+// Click to playing = fadeOut + beat + back + gap + forward (1.8 s now). Times in seconds. (Reduced motion uses SWAP_SPEED above.)
+export const SWAP_IN_PLACE = {
+  fadeOut: 0.3,
+  beat: 0.1,
+  back: 0.6,
+  gap: 0.1,
+  forward: 0.7,
+  forwardEase: "power1.inOut", // the new record settles softly
+  fadeIn: 0.4,
+};
+
+// Back / "All records" after a record came from a swap (not part of the swap's timing): how fast its timeline runs backwards, and how
+// long the demo frame takes to fade out meanwhile
+export const EJECT_AFTER_SWAP = { speed: 6, frameFade: 0.18 };
+
 // While it travels, the record is drawn by a camera that is blended between the stack camera
 // (arc = 0) and the turntable camera (arc = 1), so its perspective changes continuously.
 // Its reflections (environment map, clear coat, specular) are also faded in by arc progress,
@@ -238,8 +264,9 @@ export const ROW = {
   stepX: 2.7, // distance between sleeve centres in the row
   stepCompact: 2.6, // ...in the 2 x 2 grid on narrow screens
   offsetY: 0, // shift the row up (+) or down (-), in world units
-  bottomMargin: 48, // px: the row is centred between the heading and this far above the bottom of the visible section
   gapBelowHeading: 64, // px between the "Pick a record" label and the top of the row (it follows the heading, whatever the scroll)
+  tablet: { from: 900, to: 1300, stepX: 2.4, fillWidth: 0.94 }, // between these viewport widths the row goes from this tighter, wider setting to the desktop one (960px: sleeves about 190px)
+  bottomAir: 28, // px under the captions of the row, before the section's own bottom padding
   fillWidth: 0.84, // the row takes this share of the viewport width...
   fillHeight: 0.62, // ...and (2 x 2 grid) at most this share of its height
   maxSleevePx: 340, // a sleeve is never bigger than this on screen
@@ -268,6 +295,12 @@ export const ROW = {
 // Records -> List: the sleeves sink and fade (the select timeline's fade, no sideways travel), the canvas stops, then the
 // section's height eases to the list's and the rows fade up one after the other. List -> Records is the reverse: the rows
 // fade out, the height eases back, then the canvas resumes and the sleeves spread out from the pile as on a first visit.
+// PLAYER: the mini player under the demo (src/shelf.js, style.css). The bar is decorative: one sweep per loop, no time shown.
+export const PLAYER = {
+  loop: 30, // s, one sweep of the progress bar
+  gap: 20, // px between the demo frame's bottom and the player (side-by-side layouts)
+};
+
 export const LIST_MODE = {
   sleevesOut: 0.3, // the sleeves and captions fade out / sink
   height: 0.4, // the section's height eases to the other mode's

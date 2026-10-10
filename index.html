@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta
       name="description"
-      content="Portfolio of Vo Xuan Nhi Tran, a Software Engineering student at the University of Sydney."
+      content="Portfolio of Vo Xuan Nhi Tran, a Software Engineering student at the University of Sydney. I build full-stack web apps and I'm looking for a software engineering internship."
     />
     <title>Vo Xuan Nhi Tran</title>
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
@@ -43,6 +43,7 @@
         </div>
 
         <div class="hero-copy" data-hero-copy>
+          <!-- site-hero-badge -->
           <h1 id="name" tabindex="-1"><span>Vo Xuan</span> <span>Nhi Tran</span></h1>
           <p class="label hero-meta">
             <span class="hero-meta-group"
@@ -54,10 +55,7 @@
               ><span>2026</span></span
             >
           </p>
-          <p class="hero-line">
-            I build small web apps end to end. The music theme is because
-            there's always something playing while I work.
-          </p>
+          <!-- site-hero-line -->
           <div class="hero-cta">
             <a class="button hero-button" href="#/projects">See my projects</a>
             <ul class="links label">
@@ -193,7 +191,17 @@
         </section>
         <p class="label demo-note" id="demo-note" hidden></p>
 
-        <p class="label shelf-status" id="shelf-status" aria-live="polite"></p>
+        <!-- The mini player under the demo (src/shelf.js): the "Now playing" line, a decorative progress bar, and pause / previous / next.
+             No audio. On side-by-side layouts it is placed under the demo frame, on stacked ones it follows the panel. -->
+        <div class="player" data-player>
+          <p class="label shelf-status" id="shelf-status" aria-live="polite"></p>
+          <div class="player-bar" aria-hidden="true"><span class="player-fill"></span></div>
+          <div class="player-controls" role="group" aria-label="Player">
+            <button type="button" class="player-btn" data-player-prev aria-label="Previous project"><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 9 12l9 6V6Z"/><path d="M6 6v12"/></svg></button>
+            <button type="button" class="player-btn player-toggle" data-player-toggle aria-label="Pause" aria-pressed="false"><svg class="icon-pause" viewBox="0 0 24 24" aria-hidden="true" focusable="false" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"><path d="M10 8v8M14 8v8"/></svg><svg class="icon-play" viewBox="0 0 24 24" aria-hidden="true" focusable="false" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"><path d="m10 8 6 4-6 4V8Z"/></svg></button>
+            <button type="button" class="player-btn" data-player-next aria-label="Next project"><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"><path d="m6 6 9 6-9 6V6Z"/><path d="M18 6v12"/></svg></button>
+          </div>
+        </div>
       </section>
 
       <section
@@ -243,10 +251,7 @@
                 </svg>
                 <h3 class="label" id="about-hello">Hello</h3>
                 <p>
-                  I'm Nhi, a third-year Software Engineering student at the
-                  University of Sydney. I like building small, practical web
-                  apps, and I'm looking for a software internship where I can
-                  keep learning from people who build things for real users.
+                  I'm Nhi, a third-year Software Engineering student at the University of Sydney. I build full-stack web apps and I'm looking for a software internship in Sydney.
                 </p>
               </section>
               <section
@@ -277,11 +282,7 @@
                 </svg>
                 <h3 class="label" id="about-build">What I build</h3>
                 <p>
-                  Most of my projects started with a small annoyance: free
-                  Discord music bots that started charging, budgets that never
-                  lasted the month, and job ads that only mention "PR or
-                  citizens" at the very end. So I built a music bot, an expense
-                  tracker and JobCompass.
+                  I like building tools that solve problems I actually have: a Discord music bot for my friends' server, an expense tracker, and JobCompass, which helps students decide whether to tailor, apply or skip a job posting.
                 </p>
               </section>
               <section
@@ -498,9 +499,7 @@
                 </svg>
                 <h3 class="label" id="about-outside">Outside of code</h3>
                 <p>
-                  I read a lot, mostly philosophy and psychology, and there's
-                  almost always music on while I work. That's where the vinyl
-                  theme comes from.
+                  Outside of code I read philosophy and psychology, and there's almost always music on while I work, which is where the vinyl theme comes from.
                 </p>
               </section>
               <section
@@ -533,12 +532,7 @@
                 </svg>
                 <h3 class="label" id="about-work">How I work</h3>
                 <p>
-                  I'm still early, so I'd rather be straight about it.
-                  JobCompass was a hackathon project where I built the full app
-                  and a teammate prepared the dataset we checked it against. I
-                  can take an idea to a working, deployed app and pick up what a
-                  project needs, which is why I've used React, FastAPI, Django,
-                  Next.js and Node.
+                  JobCompass started as a hackathon project. I built the full app and a teammate prepared the dataset we validated it against. I've worked with React, FastAPI, Django, Next.js and PostgreSQL, and I like taking an idea all the way to a deployed app.
                 </p>
               </section>
             </div>
@@ -555,9 +549,7 @@
         <header class="section-head">
           <h2 class="section-title" id="contact-title" tabindex="-1">Contact</h2>
         </header>
-        <ul class="links label">
-          <!-- site-links-contact -->
-        </ul>
+        <!-- site-links-contact -->
         <!-- site-cv-button -->
       </section>
     </main>

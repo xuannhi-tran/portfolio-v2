@@ -12,6 +12,7 @@ import {
   PLATTER_RADIUS,
 } from "./turntable.js";
 import { createRecord, createGrooveTexture, RECORD_RADIUS } from "./record.js";
+import { rowMetrics, rowHeight } from "./rowLayout.js";
 import { createPickProgress, createPickTimeline } from "./pick.js";
 import * as K from "./tweaks.js"; // all the tweakable numbers live in tweaks.js
 
@@ -27,11 +28,13 @@ import * as K from "./tweaks.js"; // all the tweakable numbers live in tweaks.js
 // onShowcase(progress 0..1) while the showcase layout (see SHOWCASE in tweaks.js) moves, and onLabel(index, place)
 // each frame for every sleeve of the row that shows a caption (place = { x: centre, top, size } of the sleeve in viewport px;
 // null = no caption for it now), and onClip(css clip-path) when the part of the page the canvas shows changes.
-export async function createShelfScene({ canvas, covers, onHover, onSelect, onStateChange, onPanel, onShowcase, onLabel, onClip }) {
+export async function createShelfScene({ canvas, covers, onHover, onSelect, onStateChange, onPanel, onShowcase, onLabel, onClip, waitHidden }) {
   const reduceMotion = matchMedia("(prefers-reduced-motion: reduce)").matches;
   const devTools = import.meta.env.DEV && new URLSearchParams(location.search).has("dev"); // the scrub sliders: dev server with ?dev=1 only
   const compactQuery = matchMedia(K.COMPACT.query);
-  let compact = compactQuery.matches;
+  let compact = compactQuery.matches; // the stacked open-record layout
+  const gridQuery = matchMedia(K.COMPACT.gridQuery);
+  let grid = gridQuery.matches; // the row is a 2 x 2 grid
 
   const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: true });
   renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
@@ -178,6 +181,7 @@ export async function createShelfScene({ canvas, covers, onHover, onSelect, onSt
   let viewLock = false; // while swapping, the camera stays in the playing layout
   let tableShown = false; // the turntable only exists on screen while a record is picked
   let disposed = false;
+  let paused = false; // the player's pause: the record stops turning
 
   // ---- Collapsed stack (playing state, wide screens) -------------------------
   // collapseK.v: 0 = the remaining sleeves are spread out (the "playing" layout used for swapping),
@@ -216,7 +220,7 @@ export async function createShelfScene({ canvas, covers, onHover, onSelect, onSt
     });
   }
 
-  const groupActive = () => state === "playing" && !compact && !exiting;
+  const groupActive = () => state === "playing" && !compact;
   const isOpen = () => wantExpanded && collapseK.v < 0.5;
 
   function expand() {
@@ -249,12 +253,12 @@ export async function createShelfScene({ canvas, covers, onHover, onSelect, onSt
   // A separate layer on top of the playing state: once the record is spinning, the turntable's own
   // camera tips to look nearly straight down, and the turntable shrinks and slides to the bottom-left
   // corner (a lens shift, see placeTableCamera). The demo frame in the page follows `onShowcase`.
-  // Eject and swap play it backwards first, then run their own timelines untouched.
+  // It only ever goes in: Back (eject) and a swap never play it backwards. The turntable stays in its corner for both; the row
+  // returning (finishEject) is the only thing that switches it off, and by then the turntable has faded out.
   const SH = K.SHOWCASE;
   const ROW = K.ROW;
   const showcaseK = { v: 0 };
   let showcaseTween = null;
-  let exiting = false; // the showcase is playing backwards before an eject / swap starts
   const platterWorld = new THREE.Vector3();
   const tableLook = new THREE.Vector3();
 
@@ -264,43 +268,25 @@ export async function createShelfScene({ canvas, covers, onHover, onSelect, onSt
     applyReflections();
     onShowcase?.(v);
   }
-  // Moves the showcase to 0 or 1; instant (and always with reduced motion) = no tween
-  function tweenShowcase(target, { instant = false, onComplete } = {}) {
+  // Moves the showcase to 1 (or, instantly, to 0 or 1; always instant with reduced motion)
+  function tweenShowcase(target, { instant = false } = {}) {
     showcaseTween?.kill();
     showcaseTween = null;
     if (instant || reduceMotion) {
       setShowcase(target);
-      onComplete?.();
       return;
     }
     showcaseTween = gsap.to(showcaseK, {
       v: target,
-      duration: target ? SH.duration : SH.exitDuration,
-      ease: target ? SH.ease : SH.exitEase,
+      duration: SH.duration,
+      ease: SH.ease,
       overwrite: true,
       onUpdate: () => setShowcase(showcaseK.v),
-      onComplete,
     });
   }
   const enterShowcase = () => {
     if (!compact) tweenShowcase(1);
   };
-  // If the showcase is on, play it backwards first and only then run `run` (an eject or a swap)
-  function afterShowcaseExit(run) {
-    if (showcaseK.v <= 0.001) {
-      tweenShowcase(0, { instant: true });
-      run();
-      return;
-    }
-    exiting = true;
-    clearCollapseTimers();
-    tweenShowcase(0, {
-      onComplete: () => {
-        exiting = false;
-        run();
-      },
-    });
-  }
   function setState(next, index) {
     state = next;
     onStateChange?.(next, index);
@@ -309,7 +295,7 @@ export async function createShelfScene({ canvas, covers, onHover, onSelect, onSt
 
   // Sleeves can be hovered / picked in the stack state, and (on wide screens) while a record
   // is playing, where the other sleeves are the way to swap.
-  const canPickSleeves = () => state === "stack" || (state === "playing" && !compact && !exiting);
+  const canPickSleeves = () => state === "stack" || (state === "playing" && !compact);
 
   function applyHover() {
     sleeves.forEach((s, i) => {
@@ -430,6 +416,8 @@ export async function createShelfScene({ canvas, covers, onHover, onSelect, onSt
   // Where things sit on screen (the crate scrolls with the page, the canvas does not)
   let lastClip = "";
   let lastRowY = NaN;
+  let lastRowH = NaN;
+  let lastOpenH = NaN;
   let capSpace = 0; // px under each sleeve of the row for its caption (--cap-gap + --cap-h, style.css)
   function readCapSpace() {
     const cs = getComputedStyle(shelfEl);
@@ -450,30 +438,30 @@ export async function createShelfScene({ canvas, covers, onHover, onSelect, onSt
 
     // Browsing layout: the row (or the 2 x 2 grid on narrow screens), a fixed gap below the heading and its label
     layoutStack.x = viewW / 2;
-    const cols = compact ? Math.min(2, n) : n;
-    const rows = Math.ceil(n / cols);
-    const step = compact ? ROW.stepCompact : ROW.stepX;
-    // Each sleeve has a caption under it (capSpace px): it comes out of the height the row may take, and in the 2 x 2 grid it
-    // pushes the second row down by the same amount
-    const worldW = (cols - 1) * step + 2;
-    const px = Math.min(
-      (viewW * ROW.fillWidth) / worldW,
-      (viewH * ROW.fillHeight - rows * capSpace) / ((rows - 1) * step + 2),
-      ROW.maxSleevePx / 2,
-    );
-    const stepY = rows > 1 ? step + capSpace / px : step;
-    const worldH = (rows - 1) * stepY + 2;
+    const { cols, rows, step, px, stepY, worldH, gap } = rowMetrics({ viewW, viewH, n, grid, capSpace });
     layoutStack.zoom = px / scalePx;
     const labelEl = shelfEl.querySelector(".shelf-label");
     const headBottom = labelEl ? labelEl.getBoundingClientRect().bottom : section.top + 140;
-    const areaTop = headBottom + ROW.gapBelowHeading;
-    const areaBottom = Math.min(section.bottom, viewH) - ROW.bottomMargin; // the visible part of the section
-    layoutStack.y = Math.max(areaTop + (worldH * px) / 2, (areaTop + areaBottom - capSpace) / 2); // the sleeves and their captions centred in that space, never above it
+    const areaTop = headBottom + gap;
+    layoutStack.y = areaTop + (worldH * px) / 2;
     // For the soft glow behind the row (CSS: .shelf::before), in the section's own coordinates so it never changes with the
     // scroll (the row itself is centred in the visible part, which does): where the row sits when the section is in place
-    const topRel = headBottom - section.top + ROW.gapBelowHeading;
-    const bottomRel = Math.min(section.height, viewH) - ROW.bottomMargin;
-    const rowY = Math.round(Math.max(topRel + (worldH * px) / 2, (topRel + bottomRel - capSpace) / 2));
+    const topRel = headBottom - section.top + gap;
+    const rowY = Math.round(topRel + (worldH * px) / 2);
+    // How tall the section needs to be while the row is shown: down to the captions under the last sleeve, plus some air.
+    // (--row-h caps the crate's column in the stack state, see style.css; an open record has the whole column)
+    const rowH = rowHeight({ px, worldH, gap }, { headBottom, crateTop: rect.top, capSpace }); // (also set by src/shelf.js before the scene exists)
+    if (rowH !== lastRowH) {
+      shelfEl.style.setProperty("--row-h", `${rowH}px`);
+      lastRowH = rowH;
+    }
+    // With a record open the page is scrolled to put the crate's centre in the middle of the window, and the turntable runs to the
+    // window's bottom edge: the section has to reach that far below the crate's centre, or the canvas' clip would cut it short
+    const openH = compact ? 0 : Math.round(rect.top + rect.height / 2 - section.top + viewH / 2);
+    if (openH !== lastOpenH) {
+      shelfEl.style.setProperty("--open-h", `${openH}px`);
+      lastOpenH = openH;
+    }
     if (rowY !== lastRowY) {
       shelfEl.style.setProperty("--row-y", `${rowY}px`);
       lastRowY = rowY;
@@ -494,7 +482,7 @@ export async function createShelfScene({ canvas, covers, onHover, onSelect, onSt
       // Turntable fills the top of the column; the stack ends up off screen to the left
       scale1 = (K.COMPACT.tableFit * rect.width) / (TURNTABLE_WIDTH * RIG_SCALE);
       layoutPlay.x = rect.left + rect.width / 2 - tablePos.x * scale1;
-      layoutPlay.y = rect.top + rect.width * K.COMPACT.centreY;
+      layoutPlay.y = rect.top + K.COMPACT.topSpace + rect.width * K.COMPACT.centreY; // (topSpace: the "All records" pill above it)
     }
     layoutPlay.zoom = scale1 / scalePx;
   }
@@ -552,6 +540,11 @@ export async function createShelfScene({ canvas, covers, onHover, onSelect, onSt
     layout();
   };
   compactQuery.addEventListener("change", onCompactChange);
+  const onGridChange = () => {
+    grid = gridQuery.matches;
+    layout();
+  };
+  gridQuery.addEventListener("change", onGridChange);
   layout();
 
   // ---- Sleeve placement ----------------------------------------------------
@@ -947,16 +940,12 @@ export async function createShelfScene({ canvas, covers, onHover, onSelect, onSt
     else tl.play(0);
   }
 
-  // Back to the stack. If the showcase is on it plays backwards first, then the timeline runs backwards.
+  // Back to the stack: the record's timeline backwards. The turntable stays where it is (a record picked from the row plays its own
+  // beats in reverse, one that came from a swap goes back to its sleeve in the stack and the stack and turntable fade out), so the
+  // two are the same to look at: nothing slides to the middle of the screen.
   function eject() {
-    if (exiting) {
-      showcaseTween?.progress(1, false); // asked again (Esc twice): finish leaving the showcase now
-      return;
-    }
     if (state !== "playing" || !current) return;
-    // A pick from the row is its own timeline backwards, showcase included (the same beats in reverse)
-    if (current.direct && !reduceMotion) ejectNow();
-    else afterShowcaseExit(ejectNow);
+    ejectNow();
   }
 
   // The same timeline, backwards
@@ -966,7 +955,14 @@ export async function createShelfScene({ canvas, covers, onHover, onSelect, onSt
     clearCollapseTimers();
     wantExpanded = false;
     setState("transitioning", c.index);
-    c.tl.timeScale(ROW.ejectSpeed);
+    if (!c.direct) viewLock = true; // (the camera stays in the playing layout until the row is back: the turntable only fades out where it is)
+    if (!c.direct && !compact && showcaseK.v > 0.001) {
+      // A record that came from a swap: the demo frame does not ride the camera out (a picked-from-the-row record's own timeline
+      // fades it), so it fades here, while the turntable stays where it is
+      const frame = { v: showcaseK.v };
+      gsap.to(frame, { v: 0, duration: K.EJECT_AFTER_SWAP.frameFade, ease: "power1.in", onUpdate: () => onShowcase?.(frame.v) });
+    }
+    c.tl.timeScale(c.direct ? ROW.ejectSpeed : K.EJECT_AFTER_SWAP.speed); // (a record that came from a swap: a plain open's Back is just as quick)
     c.tl.eventCallback("onReverseComplete", () => (c.direct ? finishEject(c) : backToRow(c)));
     if (reduceMotion) crossfade(() => c.tl.progress(0, false));
     else c.tl.reverse();
@@ -975,50 +971,100 @@ export async function createShelfScene({ canvas, covers, onHover, onSelect, onSt
   // While playing: put the current record back (its timeline backwards), then play the new
   // one (a fresh timeline forwards). The camera stays in the playing layout throughout.
   function swap(i) {
-    if (state !== "playing" || !current || exiting || i === current.index || !sleeves[i]) return;
-    afterShowcaseExit(() => swapNow(i));
+    if (state !== "playing" || !current || i === current.index || !sleeves[i]) return;
+    // The turntable stays where it is (showcase on, or the stacked layout): only the records change. Reduced motion: a crossfade.
+    swapNow(i, { inPlace: !reduceMotion });
   }
 
-  function swapNow(i) {
+  let pendingSwap = null; // the short wait (the page fading out its HTML) before an in-place swap starts
+
+  // inPlace: the timed swap of SWAP_IN_PLACE (the page fades its HTML out first); otherwise the plain swap at SWAP_SPEED (reduced motion)
+  function swapNow(i, { inPlace = false } = {}) {
     if (state !== "playing" || !current || i === current.index || !sleeves[i]) return;
     const old = current;
-    viewLock = true;
+    const S = K.SWAP_IN_PLACE;
+    const T = { click: performance.now() }; // (dev: when each phase of the swap started, for the layout check)
+    if (import.meta.env.DEV) window.__swapT = T;
+    setState("transitioning", i);
     active = -1;
     applyHover();
-    clearCollapseTimers();
-    wantExpanded = false;
-    tweenCollapse(0, true); // a swap always starts from the spread-out positions, even if the group was collapsed
-    setState("transitioning", i);
 
-    // The old record's timeline plays backwards, then the new one plays forwards. A record that was picked from the
-    // row is first turned into the stack kind (its sleeve glides, unseen, into its place in the stack; its record
-    // flies back there), and played back only to where it is in its sleeve again.
-    const back = old.direct ? ROW.swapAt : 0;
-    const next = () => {
-      old.swapTween = null;
-      old.directTween?.kill();
-      old.directTween = null;
-      retire(old);
-      const tl = beginPick(i, { speed: K.SWAP_SPEED, lock: true, fromRow: false });
-      if (reduceMotion) tl.progress(1, false);
-      else tl.play(0);
+    const begin = () => {
+      T.begin = performance.now();
+      viewLock = true;
+      clearCollapseTimers();
+      wantExpanded = false;
+      tweenCollapse(0, true); // a swap always starts from the spread-out positions, even if the group was collapsed
+
+      // The old record's timeline plays backwards, then the new one plays forwards. A record that was picked from the
+      // row is first turned into the stack kind (its sleeve glides, unseen, into its place in the stack; its record
+      // flies back there), and played back only to where it is in its sleeve again.
+      const back = old.direct ? ROW.swapAt : 0;
+      const startNew = () => {
+        T.newStart = performance.now();
+        old.swapTween = null;
+        old.directTween?.kill();
+        old.directTween = null;
+        retire(old);
+        const tl = beginPick(i, { lock: true, fromRow: false });
+        if (reduceMotion) tl.progress(1, false);
+        else if (inPlace) {
+          tl.timeScale(1);
+          tl.tweenFromTo(0, tl.duration(), { duration: S.forward, ease: S.forwardEase }); // (settles softly)
+        } else {
+          tl.timeScale(K.SWAP_SPEED);
+          tl.play(0);
+        }
+      };
+      // after the old record is back in its sleeve: (in place) a gap with only the empty platter, then the new record
+      const next = () => {
+        T.backEnd = performance.now();
+        old.swapTween = null;
+        if (!inPlace) return startNew();
+        let started = false;
+        const go = () => {
+          if (started) return;
+          started = true;
+          gap.kill();
+          pendingSwap = null;
+          startNew();
+        };
+        const gap = gsap.delayedCall(S.gap, go);
+        pendingSwap = { progress: go };
+      };
+      old.tl.pause();
+      const remaining = Math.max(0, old.tl.time() - back);
+      const duration = inPlace ? S.back * (remaining / Math.max(0.001, old.tl.duration() - back)) : remaining / K.SWAP_SPEED;
+      if (old.direct) {
+        old.p.pin = 1;
+        Object.assign(old, restFor(old.index, false));
+        if (reduceMotion) old.p.direct = 0;
+        else old.directTween = gsap.to(old.p, { direct: 0, duration: Math.min(0.2, duration), ease: "none" });
+      }
+      if (reduceMotion) {
+        crossfade(() => {
+          old.tl.time(back, false);
+          startNew();
+        });
+      } else {
+        old.swapTween = old.tl.tweenTo(back, { ease: "none", duration, onComplete: next });
+      }
     };
-    old.tl.pause();
-    const duration = Math.max(0, old.tl.time() - back) / K.SWAP_SPEED;
-    if (old.direct) {
-      old.p.pin = 1;
-      Object.assign(old, restFor(old.index, false));
-      if (reduceMotion) old.p.direct = 0;
-      else old.directTween = gsap.to(old.p, { direct: 0, duration: Math.min(0.2, duration), ease: "none" });
-    }
-    if (reduceMotion) {
-      crossfade(() => {
-        old.tl.time(back, false);
-        next();
-      });
-    } else {
-      old.swapTween = old.tl.tweenTo(back, { ease: "none", duration, onComplete: next });
-    }
+    if (inPlace) {
+      // Wait until the page says its HTML is out of sight (waitHidden: the fade-out has really finished, however busy the page was),
+      // then a short beat; never longer than a moment overall
+      let started = false;
+      const go = () => {
+        if (started) return;
+        started = true;
+        clearTimeout(timer);
+        pendingSwap = null;
+        begin();
+      };
+      const timer = setTimeout(go, (S.fadeOut + S.beat) * 1000 + 700);
+      pendingSwap = { progress: go };
+      (waitHidden?.() ?? new Promise((r) => setTimeout(r, S.fadeOut * 1000))).then(() => setTimeout(go, S.beat * 1000));
+    } else begin();
   }
 
   // Jump to the end of whatever is running (Esc, or a click anywhere)
@@ -1027,23 +1073,24 @@ export async function createShelfScene({ canvas, covers, onHover, onSelect, onSt
   }
 
   function finishMotion() {
-    if (exiting) showcaseTween?.progress(1, false); // finishes the showcase exit, which starts the eject / swap...
-    if (state !== "transitioning" || !current) return; // ...and that is finished below
+    // A swap in progress: let whatever it is waiting for happen now (the page fading its HTML out, the old record sliding back, the gap with
+    // the empty platter), so that the new record is under way, and finish that below
+    pendingSwap?.progress(1);
+    if (state === "transitioning" && current?.swapTween) {
+      current.directTween?.progress(1);
+      current.swapTween.progress(1);
+      pendingSwap?.progress(1);
+    }
+    if (state !== "transitioning" || !current) return;
     const c = current;
     if (c.back) {
       c.back.progress(1); // a swapped record on its way back to the row
       return;
     }
-    if (c.swapTween) {
-      c.directTween?.progress(1);
-      c.swapTween.progress(1); // a swap on its way back: finishes it, which starts the new record...
-      if (current !== c && state === "transitioning") current.tl.progress(1, false); // ...so finish that too
-      return;
-    }
     if (c.tl.reversed()) {
-      c.tl.progress(0, false); // eject: done. swap: the new record's timeline starts...
-      if (state === "transitioning" && current && current !== c) current.tl.progress(1, false); // ...so finish it too
+      c.tl.progress(0, false); // eject: done
     } else {
+      gsap.killTweensOf(c.tl); // (the eased tween that plays a swapped-in record forwards)
       c.tl.progress(1, false);
     }
   }
@@ -1052,7 +1099,6 @@ export async function createShelfScene({ canvas, covers, onHover, onSelect, onSt
   // index -1 = the stack, otherwise that record is on the turntable.
   function jumpTo(index) {
     finishMotion();
-    exiting = false;
     tweenShowcase(0, { instant: true });
     if (state === "playing") {
       if (current.index === index) return;
@@ -1122,7 +1168,7 @@ export async function createShelfScene({ canvas, covers, onHover, onSelect, onSt
     const floatAmount = reduceMotion ? 0 : current ? current.p.bob : 1;
     placeSleeves(t, floatAmount);
     updateLabels();
-    if (current && !reduceMotion && current.p.spin > 0.001) current.record.spin(dt, current.p.spin);
+    if (current && !reduceMotion && !paused && current.p.spin > 0.001) current.record.spin(dt, current.p.spin);
 
     // The scene is drawn in up to three passes, each with the camera that suits what it shows:
     //  1. the stack (stack camera) - plus the record while it is still sliding out of its sleeve,
@@ -1184,6 +1230,10 @@ export async function createShelfScene({ canvas, covers, onHover, onSelect, onSt
     if (recordInFlight || recordSolo) {
       if (current.direct && !current.p.pin) {
         shiftCameraBy(startCamera, current.camStart.x, current.camStart.y, layoutStack, layoutStack.zoom);
+        blendCameras(recordCamera, startCamera, tableCamera, arc);
+      } else if (showcaseK.v > 0.001) {
+        // A swap with the showcase on (the turntable did not move): from the stack camera to the showcase's table camera
+        shiftCamera(startCamera, 0);
         blendCameras(recordCamera, startCamera, tableCamera, arc);
       } else {
         // Its camera glides from the stack camera to the turntable's
@@ -1313,8 +1363,10 @@ export async function createShelfScene({ canvas, covers, onHover, onSelect, onSt
     }
   };
   // On touch screens a tap anywhere else on the page also counts as "outside"
+  // (the stack on the left is outside the section's own box, so a tap on it is a tap "elsewhere" by its target: it only counts as
+  // outside when it is not on the group itself, or a tap on a collapsed stack would close it again before it could open)
   const onDocumentPointerDown = (e) => {
-    if (e.pointerType === "touch" && !shelfEl.contains(e.target)) collapse();
+    if (e.pointerType === "touch" && !shelfEl.contains(e.target) && !(groupActive() && inGroup(e))) collapse();
   };
   window.addEventListener("pointermove", onMove);
   document.documentElement.addEventListener("pointerleave", onLeave);
@@ -1328,6 +1380,59 @@ export async function createShelfScene({ canvas, covers, onHover, onSelect, onSt
     window.__shelf = {
       pick, eject, swap, skip, expand, collapse,
       getState: () => state,
+      // dev: where the playing record and the collapsed stack are on screen (CSS px, viewport), and the canvas' clip, for the layout check
+      // dev: where the sleeves of the stack on the left are (centre, viewport CSS px), and their project index
+      sleeveCentres: () => {
+        camera.updateMatrixWorld();
+        return sleeves
+          .map((sl, i) => ({ i, v: sl.mesh.visible, p: sl.mesh.getWorldPosition(new THREE.Vector3()).project(camera) }))
+          .filter((o) => o.v && !(current && o.i === current.index))
+          .map((o) => ({ i: o.i, x: ((o.p.x + 1) / 2) * viewW, y: ((1 - o.p.y) / 2) * viewH }));
+      },
+      projected: () => {
+        const boxPx = (objects, cam) => {
+          cam.updateMatrixWorld();
+          const box = new THREE.Box3();
+          objects.forEach((o) => box.expandByObject(o));
+          if (box.isEmpty()) return null;
+          const out = { l: Infinity, t: Infinity, r: -Infinity, b: -Infinity };
+          for (const x of [box.min.x, box.max.x]) for (const y of [box.min.y, box.max.y]) for (const z of [box.min.z, box.max.z]) {
+            const p = new THREE.Vector3(x, y, z).project(cam);
+            const px = ((p.x + 1) / 2) * viewW;
+            const py = ((1 - p.y) / 2) * viewH;
+            out.l = Math.min(out.l, px); out.r = Math.max(out.r, px); out.t = Math.min(out.t, py); out.b = Math.max(out.b, py);
+          }
+          return out;
+        };
+        const stackSleeves = sleeves.filter((sl, i) => sl.mesh.visible && !(current && i === current.index)).map((sl) => sl.mesh);
+        return {
+          state,
+          record: current
+            ? (() => {
+                // the disc: its centre and radius in px (the record's own geometry, not its bounding box)
+                tableCamera.updateMatrixWorld();
+                const centre = current.record.getWorldPosition(new THREE.Vector3());
+                const radius = RECORD_RADIUS * current.record.getWorldScale(new THREE.Vector3()).x;
+                const right = new THREE.Vector3().setFromMatrixColumn(tableCamera.matrixWorld, 0);
+                const edge = centre.clone().addScaledVector(right, radius);
+                centre.project(tableCamera);
+                edge.project(tableCamera);
+                return { cx: ((centre.x + 1) / 2) * viewW, cy: ((1 - centre.y) / 2) * viewH, r: ((edge.x - centre.x) / 2) * viewW };
+              })()
+            : null,
+          stack: stackSleeves.length ? boxPx(stackSleeves, camera) : null,
+          table: tableShown ? boxPx([turntable], tableCamera) : null,
+          stacked: compact,
+          tableVisible: current ? Math.max(current.p.table, current.p.pin) : 0, // (0..1: how much of the turntable is shown)
+          platter: (() => {
+            const v = platterWorld.clone().project(tableCamera);
+            return { x: ((v.x + 1) / 2) * viewW, y: ((1 - v.y) / 2) * viewH };
+          })(),
+          angle: current ? current.record.angle() : null,
+          clip: canvas.style.clipPath,
+          view: [viewW, viewH],
+        };
+      },
       collapseAmount: () => collapseK.v,
       // dev: what is where right now (for measuring the pick / eject motion)
       snap: () => ({
@@ -1393,6 +1498,9 @@ export async function createShelfScene({ canvas, covers, onHover, onSelect, onSt
     skip,
     jumpTo,
     prewarm, // build the records, compile the shaders and upload the textures before a sleeve is clicked
+    setPaused(v) {
+      paused = !!v;
+    },
     relayout: layout, // measure the section again (its height changed)
     fadeRow, // fade the row out / in without leaving the stack state (the list mode)
     enterRow, // spread the sleeves out from the pile (the canvas just became visible)
@@ -1407,6 +1515,7 @@ export async function createShelfScene({ canvas, covers, onHover, onSelect, onSt
       resizeObserver.disconnect();
       window.removeEventListener("scroll", onScroll);
       compactQuery.removeEventListener("change", onCompactChange);
+      gridQuery.removeEventListener("change", onGridChange);
       intersection.disconnect();
       document.removeEventListener("visibilitychange", sync);
       window.removeEventListener("pointermove", onMove);

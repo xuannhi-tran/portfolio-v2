@@ -1,5 +1,7 @@
 // Build-time rendering of the record shelf (used by vite.config.js):
 // the text list of tracks and the stack of sleeves. Both are real <button>s.
+import { readFileSync } from "node:fs";
+import { resolve } from "node:path";
 import { SLEEVE_BORDER } from "../src/scene/tweaks.js";
 
 const escapeHtml = (s) =>
@@ -134,6 +136,17 @@ ${s.items.join("\n")}
 // Where a project's screenshot lives, and the label for the demo frame's title bar:
 // the live demo's hostname, otherwise the repo name.
 export const screenshotUrl = (p) => `/demos/${p.slug}.png`;
+// width / height attributes for a screenshot <img>, read from the PNG's header at build time, so the browser reserves the right
+// shape before the file arrives (no layout shift, and the shape never has to be guessed). Missing file: no attributes.
+export function screenshotSize(p) {
+  try {
+    const head = readFileSync(resolve(import.meta.dirname, "../public", `demos/${p.slug}.png`)).subarray(0, 24);
+    if (head.toString("ascii", 12, 16) !== "IHDR") return "";
+    return ` width="${head.readUInt32BE(16)}" height="${head.readUInt32BE(20)}"`;
+  } catch {
+    return "";
+  }
+}
 export function demoHost(p) {
   try {
     if (p.demoUrl) return new URL(p.demoUrl).hostname;
@@ -172,7 +185,7 @@ export function renderPanels(projects) {
           <p class="label panel-side">Side ${escapeHtml(p.side)} · ${escapeHtml(p.year)}</p>
           <h3 class="panel-title" id="panel-title-${escapeHtml(p.slug)}" tabindex="-1">${escapeHtml(p.title)}</h3>
           <p class="panel-desc">${escapeHtml(p.description)}</p>
-          <img class="shot panel-shot" src="${screenshotUrl(p)}" alt="Screenshot of ${escapeHtml(p.title)}" loading="lazy" decoding="async">
+          <img class="shot panel-shot" src="${screenshotUrl(p)}"${screenshotSize(p)} alt="Screenshot of ${escapeHtml(p.title)}" loading="lazy" decoding="async">
           <p class="label panel-tracks-title" id="panel-tracks-${escapeHtml(p.slug)}">Tracklist</p>
           <ol class="panel-tracks" aria-labelledby="panel-tracks-${escapeHtml(p.slug)}">
             ${notes}

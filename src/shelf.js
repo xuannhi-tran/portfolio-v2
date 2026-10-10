@@ -18,7 +18,8 @@
 // Routes: #/projects (the stack) and #/projects/<slug> (that record playing). Picking, swapping and
 // ejecting update the hash; opening a URL, back and forward jump straight to the state, no animation.
 
-import { COMPACT, DEMO_IMAGE, LIST_MODE, LIVE_DEMO, PANEL, ROW, SHOWCASE } from "./scene/tweaks.js";
+import { COMPACT, DEMO_IMAGE, LIST_MODE, LIVE_DEMO, PANEL, PLAYER, ROW, SHOWCASE, SWAP_IN_PLACE } from "./scene/tweaks.js";
+import { rowMetrics, rowHeight } from "./scene/rowLayout.js";
 
 const shelf = document.querySelector(".shelf");
 const crate = document.querySelector(".crate");
@@ -126,7 +127,20 @@ function placePanel() {
     const w = crate.getBoundingClientRect().width;
     const h = crate.getBoundingClientRect().height;
     const thumbSize = (w - 24) / 3;
-    const free = h - (h * 0.58 + thumbSize); // empty space left under the thumbnails in the crate
+    // Under the turntable (its size follows the column's width, not its height): the player across the content column, then
+    // the thumbnails of the other records. The "All records" pill sits at the column's top (it scrolls with the page here).
+    const shelfRect = shelf.getBoundingClientRect();
+    const crateTop = crate.getBoundingClientRect().top - shelfRect.top;
+    const cs = getComputedStyle(shelf);
+    const padLeft = parseFloat(cs.paddingLeft) || 0;
+    const columnWidth = shelf.clientWidth - padLeft - (parseFloat(cs.paddingRight) || 0);
+    const playerTop = COMPACT.topSpace + w * COMPACT.playerAt;
+    placePlayer(padLeft, crateTop + playerTop, columnWidth);
+    shelf.style.setProperty("--pill-top", `${Math.round(crateTop + COMPACT.pillOffset)}px`);
+    const thumbsTop = playerTop + (player?.offsetHeight ?? 0) + COMPACT.playerGap;
+    const row = crate.querySelector(".thumbs");
+    if (row) row.style.top = `${thumbsTop}px`;
+    const free = h - (thumbsTop + thumbSize); // empty space left under the thumbnails in the crate
     info.style.cssText = `margin-top: ${-Math.max(0, free - 24)}px`;
     return;
   }
@@ -180,14 +194,19 @@ function placeFrame() {
   const pageY = shelfRect.top + window.scrollY; // the section's top, in the page
   const wanted = pageY + crateTop - margin + (crateRect.height + margin) / 2 - window.innerHeight / 2; // scroll position that centres it
   const maxScroll = Math.max(0, document.documentElement.scrollHeight - window.innerHeight);
-  // where the section's top is, or (while the page is still scrolling into place) will be, on screen
-  const finalTop = pageScrolling ? pageY - Math.min(Math.max(wanted, 0), maxScroll) : shelfRect.top;
+  // where the section's top is, or (while the page is still scrolling into place) will be, on screen: always the place the pick
+  // scrolls to, never wherever the page happens to be (a script, or the visitor, may have moved it: the frame and the player must
+  // not be laid out for that, or they end up below the section)
+  // (while the page is locked where the pick put it, that place itself is the answer: the estimate is a few px off)
+  const finalTop = !pageScrolling && lockedY !== null && !compactQuery.matches ? shelfRect.top : pageY - Math.min(Math.max(wanted, 0), maxScroll);
   const stuckBottom = (parseFloat(getComputedStyle(rowEl).top) || 0) + rowEl.offsetHeight; // screen px
   const naturalBottom = (parseFloat(getComputedStyle(shelf).paddingTop) || 0) + rowEl.offsetHeight; // section px
   const rowBottom = Math.max(naturalBottom, stuckBottom - finalTop);
-  const statusTop = status ? inShelf(status) : Infinity;
+  // The frame and the player under it stay inside the window once the scene is in place
+  const playerH = player ? player.offsetHeight + PLAYER.gap : 0;
+  const viewBottom = window.innerHeight - finalTop - F.bottomGap; // the window's bottom, in section px
   const alignedTop = Math.max(panelTop, rowBottom + F.rowGap);
-  const room = Math.min(maxHeight, statusTop - F.bottomGap - alignedTop);
+  const room = Math.min(maxHeight, viewBottom - playerH - alignedTop);
 
   let width = slot;
   let height = width / frameAspect + chrome;
@@ -207,10 +226,78 @@ function placeFrame() {
     const reference = Math.min(slot / F.aspect + chrome, maxHeight);
     top = crateTop + F.top + Math.max(0, (reference - height) / 2);
   }
-  demoFrame.style.left = `${left + (right - left - width) / 2 - shelfRect.left}px`;
+  // The player under the frame must stay inside the window too (the centred fallback above does not look at it): shrink the frame to fit
+  const lowest = viewBottom - playerH;
+  if (top + height > lowest) {
+    height = Math.max(chrome + 120, lowest - top);
+    width = Math.min(width, (height - chrome) * frameAspect);
+  }
+  const frameLeft = left + (right - left - width) / 2 - shelfRect.left;
+  demoFrame.style.left = `${frameLeft}px`;
   demoFrame.style.top = `${top}px`;
   demoFrame.style.width = `${width}px`;
   demoFrame.style.height = `${height}px`;
+  placePlayer(frameLeft, top + height + PLAYER.gap, width);
+}
+
+// ---- The mini player ---------------------------------------------------------------
+// Under the demo frame on side-by-side layouts (placed with it), after the panel in the page flow on stacked ones. Pause stops the
+// record's turn and the bar; previous / next play the neighbouring project (wrapping), through the same path as the other
+// records' buttons. It fades with the panel. No audio.
+const player = shelf.querySelector("[data-player]");
+const playerToggle = player?.querySelector("[data-player-toggle]");
+const playerFill = player?.querySelector(".player-fill");
+let playerPaused = false;
+let playerSwap = false; // the last swap came from the player: focus stays on its button
+const projectCount = () => slugs.length;
+
+function placePlayer(left, top, width) {
+  if (!player) return;
+  player.classList.add("is-placed");
+  player.style.left = `${left}px`;
+  player.style.top = `${top}px`;
+  player.style.width = `${width}px`;
+}
+function setPaused(paused) {
+  playerPaused = paused;
+  scene?.setPaused(paused);
+  player?.classList.toggle("is-paused", paused);
+  playerToggle?.setAttribute("aria-pressed", String(paused));
+  playerToggle?.setAttribute("aria-label", paused ? "Play" : "Pause");
+}
+
+// A record has just been chosen: playing (paused with reduced motion, where nothing turns anyway), the bar from the start.
+// Switching from one open record to another keeps the pause state.
+function resetPlayer({ keepPaused = false } = {}) {
+  if (!keepPaused) setPaused(reducedMotion());
+  if (playerFill) {
+    playerFill.style.animation = "none";
+    void playerFill.offsetWidth; // restart the sweep
+    playerFill.style.animation = "";
+  }
+}
+
+function playerStep(step) {
+  if (uiState !== "playing" || picked < 0) return;
+  playerSwap = true;
+  requestPick((picked + step + projectCount()) % projectCount());
+}
+
+function setUpPlayer() {
+  if (!player) return;
+  player.style.setProperty("--player-loop", `${PLAYER.loop}s`);
+  playerToggle?.addEventListener("click", () => setPaused(!playerPaused));
+  player.querySelector("[data-player-prev]")?.addEventListener("click", () => playerStep(-1));
+  player.querySelector("[data-player-next]")?.addEventListener("click", () => playerStep(1));
+  player.addEventListener("keydown", (e) => {
+    const step = { ArrowLeft: -1, ArrowRight: 1 }[e.key];
+    if (!step) return;
+    e.preventDefault();
+    playerStep(step);
+  });
+  const sync = () => (compactQuery.matches ? placePanel() : placeFrame());
+  compactQuery.addEventListener("change", sync);
+  sync();
 }
 
 // Called by the scene as the showcase moves (0 = the normal playing layout, 1 = the showcase)
@@ -240,6 +327,7 @@ function onShowcase(progress) {
 // Called by the scene while a record's panel fades in or out (amount 0..1)
 function onPanel(index, amount) {
   const reduce = reducedMotion();
+  player?.style.setProperty("--player-o", String(index >= 0 ? amount : 0));
   panels.forEach((panel, i) => {
     const visible = i === index && amount > 0.001;
     if (!visible) {
@@ -337,6 +425,7 @@ function startLive() {
   liveMode = "loading";
   shelf.dataset.live = "on"; // the 3D canvas ignores the pointer meanwhile
   htmlElement.classList.add("demo-live"); // the page behind does not scroll (a wheel over the demo cannot chain into it)
+  lockedY ??= window.scrollY;
 
   const iframe = document.createElement("iframe");
   iframe.className = "demo-iframe";
@@ -558,9 +647,11 @@ function hideIfBrokenShot(el) {
   if (el instanceof HTMLImageElement && el.classList.contains("shot")) el.hidden = true;
 }
 
-function loadDemo(index) {
+// Puts a project's screenshot (and its address in the title bar) in the frame. Resolves once the picture is in (or its placeholder).
+// instant: no crossfade (the frame is out of sight, or the page is jumping straight to a record)
+function loadDemo(index, { instant = false } = {}) {
   const panel = panels[index];
-  if (!panel || !demoBody) return;
+  if (!panel || !demoBody) return Promise.resolve();
   endLive(); // a newly picked project always starts on its screenshot
   liveUrl = panel.dataset.liveUrl || "";
   updateLiveButtons();
@@ -570,17 +661,25 @@ function loadDemo(index) {
   const url = `/demos/${panel.dataset.slug}.png`;
   const probe = new Image();
   probe.decoding = "async";
-  probe.onload = () => token === demoToken && showDemoImage(url, `Screenshot of ${titles[index]}`, probe.naturalWidth, probe.naturalHeight);
-  probe.onerror = () => token === demoToken && showDemoPlaceholder();
-  probe.src = url;
+  return new Promise((resolve) => {
+    probe.onload = () => {
+      if (token === demoToken) showDemoImage(url, `Screenshot of ${titles[index]}`, probe.naturalWidth, probe.naturalHeight, instant);
+      resolve();
+    };
+    probe.onerror = () => {
+      if (token === demoToken) showDemoPlaceholder();
+      resolve();
+    };
+    probe.src = url;
+  });
 }
 
-function showDemoImage(url, alt, width, height) {
+function showDemoImage(url, alt, width, height, forceInstant = false) {
   const incoming = demoImgs.find((img) => img !== demoFront) ?? demoImgs[0];
   incoming.alt = alt;
   incoming.src = url;
   // Crossfade if the frame is on screen; if it is hidden (a swap leaves the showcase first) just switch
-  const instant = !demoFrame || demoFrame.hidden;
+  const instant = forceInstant || !demoFrame || demoFrame.hidden || shelf.classList.contains("is-swapping");
   if (instant) demoShot.classList.add("no-fade");
   demoFront?.classList.remove("is-front");
   incoming.classList.add("is-front");
@@ -688,11 +787,63 @@ function exitSolo() {
 }
 function lockScroll() {
   if (compactQuery.matches) enterSolo();
-  else htmlElement.classList.add("shelf-locked");
+  else {
+    htmlElement.classList.add("shelf-locked");
+    lockedY = window.scrollY;
+  }
 }
 function unlockScroll() {
   htmlElement.classList.remove("shelf-locked");
+  if (!htmlElement.classList.contains("demo-live")) lockedY = null;
   exitSolo();
+}
+
+// ---- The scroll guard ------------------------------------------------------------------------------------------
+// With a record open on a wide screen the page is locked (overflow: hidden), which stops the visitor scrolling but not a script:
+// an embedded app that scrolls its own message list into view, or focuses its input, moves the TOP page too (a cross-origin
+// iframe cannot be told not to). So while the page is locked every scroll that did not follow the visitor's own input is undone
+// at once, back to where it was locked. And the lock never traps the visitor: if the page is somewhere outside the open section
+// and they try to scroll, the lock (and the live demo) is let go; it is taken up again when they scroll back into the section.
+let lockedY = null; // where the page is locked (null: not locked)
+let lastInput = 0; // when the visitor last used the wheel, touch, keys or the pointer on the page (not inside an iframe)
+for (const type of ["wheel", "touchmove", "keydown", "pointerdown"]) {
+  window.addEventListener(type, () => (lastInput = performance.now()), { passive: true, capture: true });
+}
+const pageLocked = () => !compactQuery.matches && (htmlElement.classList.contains("shelf-locked") || htmlElement.classList.contains("demo-live"));
+const sectionHoldsScreen = () => {
+  const r = shelf.getBoundingClientRect();
+  return r.top < window.innerHeight * 0.5 && r.bottom > window.innerHeight * 0.5;
+};
+function releaseLock() {
+  endLive();
+  htmlElement.classList.remove("shelf-locked");
+  lockedY = null;
+}
+function setUpScrollGuard() {
+  window.addEventListener("scroll", () => {
+    if (!pageLocked()) {
+      lockedY = null;
+      return;
+    }
+    if (lockedY === null) {
+      lockedY = window.scrollY;
+      return;
+    }
+    if (Math.abs(window.scrollY - lockedY) <= 1) return;
+    if (performance.now() - lastInput < 150) lockedY = window.scrollY; // the visitor did it (a scrollbar drag, say)
+    else window.scrollTo({ top: lockedY, behavior: "instant" }); // a script did it: put it back
+  }, { passive: true });
+  // Trying to scroll while the page is out of the open section (the lock should not have held it there): let go
+  const tryScroll = () => {
+    if (uiState === "stack" || !pageLocked() || sectionHoldsScreen()) return;
+    releaseLock();
+  };
+  for (const type of ["wheel", "touchmove", "keydown"]) window.addEventListener(type, tryScroll, { passive: true });
+  // ...and take the lock up again when they come back to the open record
+  window.addEventListener("scrollend", () => {
+    if (uiState !== "playing" || compactQuery.matches || htmlElement.classList.contains("shelf-locked") || pageScrolling) return;
+    if (sectionHoldsScreen()) lockScroll();
+  });
 }
 function lockWhenAligned() {
   if (routing || reducedMotion()) {
@@ -736,7 +887,7 @@ function render() {
   playButtons.forEach((b, i) => (b.hidden = !(playing && !compact && i !== picked)));
   thumbs.forEach((b, i) => (b.hidden = !(playing && compact && i !== picked)));
 
-  if (status) status.textContent = playing && picked !== -1 ? `Now playing: ${titles[picked]}` : "";
+  if (status && !shelf.classList.contains("is-swapping")) status.textContent = playing && picked !== -1 ? `Now playing: ${titles[picked]}` : "";
   if (ejectButton) ejectButton.hidden = uiState === "stack";
 }
 
@@ -771,13 +922,57 @@ function focusNextPlayable(from) {
   (next ?? ejectButton)?.focus({ preventScroll: true });
 }
 
+// Back in the row: the section eases from its open-record height to the row's, so nothing below it jumps
+function releaseHeight(fromHeight) {
+  const toHeight = shelf.offsetHeight;
+  if (!gsapNow || Math.abs(fromHeight - toHeight) < 2) return;
+  htmlElement.classList.add("mode-switching"); // no scroll anchoring while the page below changes height
+  shelf.style.height = `${fromHeight}px`;
+  gsapNow.to(shelf, {
+    height: toHeight,
+    duration: 0.45,
+    ease: LIST_MODE.ease,
+    onComplete: () => {
+      shelf.style.height = "";
+      htmlElement.classList.remove("mode-switching");
+    },
+  });
+}
+
+let swapInTimer = 0;
+let swapContentIndex = -1; // an in-place swap is waiting for its HTML to be out of sight before the new record's content goes in
+let swapContentReady = Promise.resolve();
+// The new record's content in one step, while everything is hidden: the live demo is taken down, the title bar, the screenshot and the
+// "Now playing" line change (the panel is the scene's: it shows the new record's panel once the new record starts)
+function applySwapContent() {
+  if (swapContentIndex < 0) return;
+  const i = swapContentIndex;
+  swapContentIndex = -1;
+  endLive();
+  if (status) status.textContent = `Now playing: ${titles[i]}`;
+  swapContentReady = loadDemo(i, { instant: true });
+}
+let ejectAfterSwap = false; // "All records" was pressed while one record was swapping for another
 function onStateChange(next, index) {
   const previous = uiState;
   uiState = next;
 
-  if (next !== "playing") endLive();
+  // Switching records while one is open (the turntable stays put, the page fades its HTML out and in): the frame, the player and the
+  // panel keep showing the OLD record until they are fully hidden; the new record's content goes in once, then (when it is playing)
+  // they fade back in
+  const inPlaceSwap = previous === "playing" && next === "transitioning" && lastAction === "swap" && !routing && !reducedMotion() && index !== picked;
+  if (next !== "playing" && !inPlaceSwap) endLive();
   if (next === "transitioning") {
     transitionStart = performance.now();
+    if (lastAction !== "eject") resetPlayer({ keepPaused: lastAction === "swap" }); // a record was chosen: it plays (or stays paused), the bar starts again
+    // Switching records while one is open (the turntable stays put): the frame, the player and the panel fade out now and come back
+    // when the new record is playing (the scene waits SWAP_IN_PLACE.fadeOut before it starts moving anything)
+    if (inPlaceSwap) {
+      clearTimeout(swapInTimer);
+      shelf.classList.remove("is-swap-in");
+      shelf.classList.add("is-swapping");
+      swapContentIndex = index;
+    }
     active = -1;
     if (!routing && !navClosing) {
       // The URL follows what the user does (picking, swapping and ejecting add history entries)
@@ -785,7 +980,7 @@ function onStateChange(next, index) {
       if (location.hash !== target) history.pushState(null, "", target);
     }
     // Only the record that is about to play gets its screenshot loaded (not on an eject)
-    if (!(previous === "playing" && index === picked)) loadDemo(index);
+    if (!(previous === "playing" && index === picked) && !inPlaceSwap) loadDemo(index, { instant: routing });
     if (previous === "stack") {
       picked = index;
       // Bring the scene into view: the stack's column, or the top of it on narrow screens
@@ -797,10 +992,41 @@ function onStateChange(next, index) {
     }
   }
 
+  if (shelf.classList.contains("is-swapping") && (next === "playing" || next === "stack")) {
+    const index0 = swapContentIndex;
+    if (next === "playing") {
+      applySwapContent(); // (if the swap was skipped before the HTML was out of sight: put the content in now, still hidden)
+      const ready = swapContentReady;
+      ready.then(() => {
+        if (uiState !== "playing" || !shelf.classList.contains("is-swapping")) return;
+        shelf.classList.remove("is-swapping");
+        shelf.classList.add("is-swap-in"); // (the fade-in transition applies while this class is on)
+        swapInTimer = setTimeout(() => shelf.classList.remove("is-swap-in"), SWAP_IN_PLACE.fadeIn * 1000 + 100);
+      });
+    } else {
+      swapContentIndex = -1;
+      shelf.classList.remove("is-swapping");
+    }
+    void index0;
+  }
+  if (next === "playing" && ejectAfterSwap) {
+    ejectAfterSwap = false;
+    setTimeout(requestEject, 80); // (after the scene has finished setting the playing state up)
+  }
+  if (next !== "playing") ejectAfterSwap = ejectAfterSwap && next === "transitioning";
   const wasPicked = picked;
   if (next === "playing") picked = index;
   if (next === "stack") picked = -1;
+  if (previous === "stack" && next !== "stack") {
+    gsapNow?.killTweensOf(shelf); // a section height still easing back from the last record: the open height applies at once
+    shelf.style.height = "";
+  }
+  const openHeight = next === "stack" && previous !== "stack" ? shelf.offsetHeight : 0;
   render(); // first, so the controls are visible and can take focus
+  // The open record has the section's full height at once (CSS), and the scene measures it before the first frame of the move;
+  // back in the row the height eases down to the row's while the page settles on the section
+  if (previous === "stack" && next !== "stack") scene?.relayout();
+  if (openHeight && !routing && !reducedMotion()) releaseHeight(openHeight);
   if (next === "stack") {
     unlockScroll(); // back in the row: the page scrolls again
     // Settle with the heading and the row in view (the pick scrolled the scene into place, narrow screens also moved the page)
@@ -815,8 +1041,11 @@ function onStateChange(next, index) {
 
   if (next === "playing") {
     placePanel();
-    if (lastAction === "swap" && !routing) focusNextPlayable(index);
+    if (lastAction === "swap" && !routing && playerSwap) {
+      if (!player.contains(document.activeElement)) playerToggle?.focus({ preventScroll: true });
+    } else if (lastAction === "swap" && !routing) focusNextPlayable(index);
     else panels[index]?.querySelector(".panel-title")?.focus({ preventScroll: true }); // the panel just opened
+    playerSwap = false;
   }
   if (next === "stack" && !routing && !navClosing && (document.activeElement.closest?.(".panel") || document.activeElement === ejectButton || document.activeElement === document.body)) {
     // Back where we started: return keyboard focus to the record that was picked
@@ -849,7 +1078,36 @@ export function closeRecord() {
   });
 }
 
+// The section's browsing height (--row-h) from the page alone, so it is right before the 3D scene exists (the scene keeps it
+// up to date afterwards with the same numbers). Without it the section would shrink when the scene arrives, under a nav scroll.
+const gridQuery = matchMedia(COMPACT.gridQuery);
+function setRowHeight() {
+  const label = shelf.querySelector(".shelf-label");
+  if (!label || !crate) return;
+  const cs = getComputedStyle(shelf);
+  const capSpace = (parseFloat(cs.getPropertyValue("--cap-gap")) || 0) + (parseFloat(cs.getPropertyValue("--cap-h")) || 0);
+  const m = rowMetrics({ viewW: htmlElement.clientWidth, viewH: htmlElement.clientHeight, n: tracks.length, grid: gridQuery.matches, capSpace });
+  shelf.style.setProperty("--row-h", `${rowHeight(m, { headBottom: label.getBoundingClientRect().bottom, crateTop: crate.getBoundingClientRect().top, capSpace })}px`);
+}
+
+// A list thumbnail whose file is missing or fails to load is dropped, and the text takes the whole row
+function setUpThumbs() {
+  listLayer.querySelectorAll(".row-thumb-img").forEach((img) => {
+    const drop = () => img.closest(".row-body")?.classList.add("no-thumb");
+    img.addEventListener("error", drop, { once: true });
+    if (img.complete && img.naturalWidth === 0 && img.getAttribute("src")) drop();
+  });
+}
+
 export function initShelf() {
+  shelf.style.setProperty("--swap-out", `${SWAP_IN_PLACE.fadeOut}s`);
+  shelf.style.setProperty("--swap-in", `${SWAP_IN_PLACE.fadeIn}s`);
+  setUpScrollGuard();
+  setUpThumbs();
+  setUpPlayer();
+  setRowHeight();
+  window.addEventListener("resize", setRowHeight);
+  document.fonts?.ready.then(setRowHeight); // the heading's height settles with the font
   buildPlayControls();
   import("gsap").then((m) => (gsapNow = m.default));
   modeButtons.forEach((b) => b.addEventListener("click", () => switchMode(b.dataset.mode)));
@@ -916,8 +1174,12 @@ export function initShelf() {
   });
 
   // A click anywhere while it is moving jumps to the end (ignoring the click that started it)
-  document.addEventListener("click", () => {
-    if (uiState === "transitioning" && performance.now() - transitionStart > 150) scene?.skip();
+  document.addEventListener("click", (e) => {
+    if (uiState === "transitioning" && performance.now() - transitionStart > 150) {
+      // "All records" during a swap: finish the swap, then go back (queued)
+      if (lastAction === "swap" && e.target.closest?.("#eject")) ejectAfterSwap = true;
+      scene?.skip();
+    }
   });
 
   render();
@@ -1185,6 +1447,16 @@ export async function enterShelf() {
       onShowcase,
       onLabel: showLabel,
       onClip: (clip) => capsLayer && (capsLayer.style.clipPath = clip),
+      // An in-place swap (the turntable stays) starts moving records only once the HTML has really faded out
+      waitHidden: () =>
+        new Promise((resolve) => {
+          const hidden = () => {
+            applySwapContent(); // the new record's content goes in now, in one step, out of sight
+            resolve();
+          };
+          if (!player || getComputedStyle(player).opacity < 0.02) return hidden();
+          player.addEventListener("transitionend", hidden, { once: true });
+        }),
     });
 
     scene = created;
