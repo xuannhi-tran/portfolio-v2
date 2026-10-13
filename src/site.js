@@ -5,7 +5,7 @@ export const site = {
   github: "https://github.com/xuannhi-tran",
   linkedin: "https://www.linkedin.com/in/xuannhi-tran",
   cv: "/assets/Vo Xuan Nhi Tran - Software Engineer - CV.pdf",
-  cvFileName: "Vo_Xuan_Nhi_Tran_CV.pdf",
+  cvFileName: "Vo Xuan Nhi Tran_Software Engineer_CV.pdf",
   // The first screen. An empty value leaves that part out.
   heroTagline:
     "I build full-stack web apps, from the database to the interface. Currently looking for a software engineering internship.",
